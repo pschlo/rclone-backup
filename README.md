@@ -5,7 +5,7 @@
 1. having a remote location mounted in the system all the time might be impractical if only a single process needs the mount
 2. after issuing `rclone mount`, it takes some unknown time before the mount actually becomes available
 
-This script is a *wrapper* around arbitrary programs to provide them with *remote files*. It performs the following steps:
+This script is a *wrapper* around arbitrary programs to provide them with read-only *remote files*. It performs the following steps:
 
 1. **set up** a mount in a temporary directory and wait for it to become available
 2. **execute** the program in the mount directory
@@ -30,7 +30,7 @@ When specifying rclone mount flags, make sure to finish them with a `--`. Otherw
 $ ./serve-rclone-mount.sh my-onedrive:foo/bar my-program -a --arg2 arg3
 ```
 
-This will mount `my-onedrive:foo/bar` and execute `my-program -a --arg2 arg3` in the mount directory.
+This will mount `my-onedrive:foo/bar` as read-only and execute `my-program -a --arg2 arg3` in the mount directory.
 
 ```bash
 $ ./serve-rclone-mount.sh --config /path/to/rclone.conf -- my-onedrive:foo/bar my-program -a --arg2 arg3
