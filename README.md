@@ -1,12 +1,51 @@
-# rclone-backup
-Creates `restic` backups from `rclone` remotes
+# wrap-rclone-mount
+
+`rclone` can mount remote file locations on the local machine. This is very useful, because programs can then interact with the remote files just like with local files. However:
+
+1. having a remote location mounted in the system all the time might be impractical if only a single process needs the mount
+2. after issuing `rclone mount`, it takes some unknown time before the mount actually becomes available
+
+This script is a *wrapper* around arbitrary programs to provide them with *remote files*. It works as follows:
+
+1. **set up** a mount in a temporary directory and wait for it to become available
+2. **execute** the program in the mount directory
+3. **wait** for it to finish
+4. **close** the mount
+
+In this repository you can also find an example script `backup.sh` that uses `wrap-rclone-mount`. It creates a backup of a remote location using `restic`.
 
 
 
 ## Usage
 
 ```bash
-$ ./rclone-backup.sh [--config rclone-config] [--script restic-script] rclone-remote-path restic-repo-path
+$ ./wrap-rclone-mount.sh [--config <rclone-config-path>] <rclone-remote-path> <program> [args...]
+```
+
+
+
+## Examples
+
+```bash
+$ ./wrap-rclone-mount.sh my-onedrive:foo/bar my-program -a --arg2 arg3
+```
+
+This will mount `my-onedrive:foo/bar` and execute `my-program -a --arg2 arg3` in the mount directory.
+
+```bash
+$ ./wrap-rclone-mount.sh --config /path/to/rclone.conf my-onedrive:foo/bar my-program -a --arg2 arg3
+```
+
+This will do the same, but read the remote information from `/path/to/rclone.conf` instead of the default config.
+
+
+
+## backup.sh
+
+### Usage
+
+```bash
+$ ./backup.sh <rclone-remote-path> <restic-repository-path>
 ```
 
 To run the script, you need:
@@ -15,39 +54,28 @@ To run the script, you need:
 2. a `restic` repository. Enter `restic init` to create one.
 
 
+### Examples
 
-## Example
-
-* If the `rclone` remote is configured in the default config and you just want to do a plain backup:
+* If the rclone remote is configured in the default config and you just want to do a plain backup:
 
     ```bash
     $ ./rclone-backup.sh my-onedrive:foo/bar ~/backups/onedrive_backup
     ```
 
-    This will perform a normal backup. Note that unless you told `restic` how to find the repository password, e.g. by setting an environment variable, you will be prompted for it.
+    Note that unless you told restic how to find the repository password, e.g. by setting an environment variable, you will be prompted for it.
 
-* If you have a custom `rclone` config somewhere:
+* If you have a custom rclone config somewhere, you can enter
 
-    ```bash
-    $ ./rclone-backup.sh --config /path/to/rclone.conf my-onedrive:foo/bar ~/backups/onedrive_backup
-    ```
-    or
-    
     ```bash
     $ export RCLONE_CONFIG=/path/to/rclone.conf
-    $ ./rclone-backup.sh my-onedrive:foo/bar ~/backups/onedrive_backup
     ```
     
-* You can also use your own `restic` backup script. Note that `RESTIC_REPOSITORY` will already be set:
-
-    ```bash
-    $ ./rclone-backup.sh --script run-backup.sh my-onedrive:foo/bar ~/backups/onedrive_backup
-    ```
-
-* If your `restic` repository is also on a remote location:
+    before running the backup script
+    
+* If your restic repository is also on a remote location:
 
     ```bash
     $ ./rclone-backup.sh my-onedrive:foo/bar rclone:backup-server:backups/onedrive_backup
     ```
 
-    In this example, a second `rclone` remote `backup-server` has been configured beforehand.
+    In this example, a second rclone remote `backup-server` has been configured beforehand.

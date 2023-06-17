@@ -1,16 +1,14 @@
 #!/bin/bash
 
 # POSITIONAL ARGUMENTS
-#   1: rclone path, e.g. my_onedrive:foo/bar
-#   2: restic path
+#   1: rclone remote path, e.g. my_onedrive:foo/bar
+#   2: program path
 
 # OPTIONAL ARGUMENTS
-#   --config            rclone config path. Default is default rclone config.
-#   --script            restic script path. Default is simple backup
+#   --config    rclone config path. Default is default rclone config.
 
 # ENVIRONMENT VARIABLES
 #   RCLONE_CONFIG
-#   RESTIC_PASSWORD
 
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
@@ -34,52 +32,51 @@ timestamp_ms () {
 
 # ---- PARSE ARGUMENTS ----
 
-# from https://stackoverflow.com/a/14203146
+# adapted from https://stackoverflow.com/a/14203146
 
 POSITIONAL_ARGS=()
+is_pos_args="false"
 
 while (($# > 0)); do
-  case "$1" in
-    -c|--config)
-      RCLONE_CONF="$2"
-      shift # past argument
-      shift # past value
-      ;;
-    -s|--script)
-      RESTIC_SCRIPT="$2"
-      shift # past argument
-      shift # past value
-      ;;
-    -*|--*)
-      echo "ERROR: Unknown option $1"
-      exit 1
-      ;;
-    *)
-      POSITIONAL_ARGS+=("$1") # save positional arg
-      shift # past argument
-      ;;
-  esac
+    # we have already seen a positional arg
+    # everything following will also be parsed as positional arg
+    if [[ $is_pos_args == "true" ]]; then
+        POSITIONAL_ARGS+=("$1") # save positional arg
+        shift # past argument
+        continue
+    fi
+    # we have not yet seen a positional arg
+    case "$1" in
+        -c|--config)
+            RCLONE_CONF="$2"
+            shift # past argument
+            shift # past value
+            ;;
+        -*|--*)
+            echo "ERROR: Unknown option $1"
+            exit 1
+            ;;
+        *)
+            # found positional arg
+            is_pos_args="true"
+            ;;
+    esac
 done
 
 # parse positional arguments
 
 set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
-if (($# != 2)); then echo "ERROR: Expected 2 positional arguments, but $# where given"; exit 1; fi
+if (($# < 2)); then echo "ERROR: Expected at least 2 positional arguments, but $# where given"; exit 1; fi
 SOURCE_PATH="$1"  # path on source, e.g. server
+shift
 
-# absolute path to restic repository
-REPO_PATH="$2"
-if [[ $REPO_PATH != /* ]]; then
+# path to restic repository
+PROGRAM_PATH="$1"
+shift
+if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
     # relative path; convert to absolute
-    REPO_PATH="$PWD"/"$REPO_PATH"
+    PROGRAM_PATH="$PWD"/"$PROGRAM_PATH"
 fi
-export RESTIC_REPOSITORY="$REPO_PATH"
-
-if [[ ${RESTIC_SCRIPT+1} && $RESTIC_SCRIPT != /* ]]; then
-    # relative path; convert to absolute
-    RESTIC_SCRIPT="$PWD"/"$RESTIC_SCRIPT"
-fi
-
 
 
 
@@ -91,7 +88,6 @@ fi
 
 # define function to be run at exit
 cleanup () {
-    popd >/dev/null 2>&1 && true
     echo ""
     set +o errexit
     echo "cleaning up"
@@ -186,14 +182,13 @@ echo "mount successful"
 
 
 
-# ---- BACKUP ----
-echo "backing up to $REPO_PATH"
-pushd "$MOUNT_PATH" >/dev/null
+# ---- RUNNING THE PROGRAM  ----
+echo "running $PROGRAM_PATH"
 
-if [[ ${RESTIC_SCRIPT+1} ]]; then
-    $RESTIC_SCRIPT
-else
-    restic backup --ignore-inode "."
-fi
-
-popd >/dev/null
+(
+    # process should be able to access the original working directory (where this script was executed in)
+    export ORIGINAL_PWD="$PWD"
+    # working directory for process is the mount folder
+    cd "$MOUNT_PATH"
+    $PROGRAM_PATH "$@"
+)
