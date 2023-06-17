@@ -74,26 +74,36 @@ fi
 # define function to be run at exit
 cleanup () {
     echo ""
+    echo ""
     set +o errexit
-    echo "cleaning up"
+    # echo "cleaning up"
     stop_mount
     delete_mount_dir
     set -o errexit
 }
 
 stop_mount () {
+    if ! is_alive; then return 0; fi
+
     if is_mounted; then
         umount "$MOUNT_PATH" 2>/dev/null
         if (($? > 0)); then
-            echo "unmounting failed"
-            echo "killing mount process"
-            kill $MOUNT_PID
+            echo "unmounting failed; killing mount process"
+            # we could *wait* for processes to finish their business with the mount dir,
+            # but this script assumes that a *single* process is accessing the mount.
+            # Upon exit signal, bash first waits for the running command to finish and
+            # then finishes itself. Thus, the process is dead already.
+
+            # kill might fail if mount process failed in the meantime
+            kill $MOUNT_PID 2>/dev/null
         fi
     else
-        # not mounted, either because not YET mounted or because of failure
-        is_alive && kill $MOUNT_PID
+        # not yet mounted
+        # kill might fail if mount process failed in the meantime
+        kill $MOUNT_PID 2>/dev/null
     fi
 
+    echo "waiting for mount to stop"
     # wait for TIMEOUT_MS millisecods for the mount process to terminate
     TIMEOUT_MS=$((10*SECONDS))
     t0=$(timestamp_ms)
@@ -101,6 +111,7 @@ stop_mount () {
 
     while is_alive && ! is_timeout; do sleep 0.1; done
     if is_alive; then echo "ERROR: Could not terminate mount process"; exit 1; fi
+    echo "mount stopped"
     return 0
 }
 
