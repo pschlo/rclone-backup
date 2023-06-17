@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # POSITIONAL ARGUMENTS
-#   1: rclone remote path, e.g. my_onedrive:foo/bar
-#   2: program path
+#   1       rclone remote path, e.g. my_onedrive:foo/bar
+#   2       program path
+#   3..     program arguments
 
-# OPTIONAL ARGUMENTS
-#   --config    rclone config path. Default is default rclone config.
 
 # ENVIRONMENT VARIABLES
 #   RCLONE_CONFIG
@@ -32,40 +31,24 @@ timestamp_ms () {
 
 # ---- PARSE ARGUMENTS ----
 
-# adapted from https://stackoverflow.com/a/14203146
+# (no longer) adapted from https://stackoverflow.com/a/14203146
 
-POSITIONAL_ARGS=()
-is_pos_args="false"
-
-while (($# > 0)); do
-    # we have already seen a positional arg
-    # everything following will also be parsed as positional arg
-    if [[ $is_pos_args == "true" ]]; then
-        POSITIONAL_ARGS+=("$1") # save positional arg
-        shift # past argument
-        continue
-    fi
-    # we have not yet seen a positional arg
-    case "$1" in
-        -c|--config)
-            RCLONE_CONF="$2"
-            shift # past argument
-            shift # past value
-            ;;
-        -*|--*)
-            echo "ERROR: Unknown option $1"
-            exit 1
-            ;;
-        *)
-            # found positional arg
-            is_pos_args="true"
-            ;;
-    esac
+KEYWORD_ARGS=()
+while [[ (($# > 0)) && $1 != "--" ]]; do
+    KEYWORD_ARGS+=("$1")
+    shift
 done
 
-# parse positional arguments
+if (($# == 0)); then
+    # missing -- delimiter
+    # assume that no rclone args were passed
+    set -- "${KEYWORD_ARGS[@]}"
+    KEYWORD_ARGS=()
+else
+    # remove -- delimiter
+    shift
+fi
 
-set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
 if (($# < 2)); then echo "ERROR: Expected at least 2 positional arguments, but $# where given"; exit 1; fi
 SOURCE_PATH="$1"  # path on source, e.g. server
 shift
@@ -148,10 +131,9 @@ echo "mounting remote $SOURCE_PATH"
 # launch fuse mount daemon
 
 args=()
-if [[ ${RCLONE_CONF+1} ]]; then
-    args+=("--config" "$RCLONE_CONF")
-fi
-args+=("--read-only" "$SOURCE_PATH" "$MOUNT_PATH")
+args+=("$SOURCE_PATH" "$MOUNT_PATH")
+args+=("--read-only")
+args+=("${KEYWORD_ARGS[@]}")
 
 setsid rclone mount "${args[@]}" &
 MOUNT_PID=$!
