@@ -5,7 +5,7 @@
 #   2: restic path
 
 # OPTIONAL ARGUMENTS
-#   --conf              rclone config path. Default is default rclone config.
+#   --config            rclone config path. Default is default rclone config.
 #   --script            restic script path. Default is simple backup
 
 # ENVIRONMENT VARIABLES
@@ -40,7 +40,7 @@ POSITIONAL_ARGS=()
 
 while (($# > 0)); do
   case "$1" in
-    -c|--conf)
+    -c|--config)
       RCLONE_CONF="$2"
       shift # past argument
       shift # past value
