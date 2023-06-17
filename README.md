@@ -1,4 +1,4 @@
-# wrap-rclone-mount
+# serve-rclone-mount
 
 `rclone` can mount remote file locations on the local machine. This is very useful, because programs can then interact with the remote files just like with local files. However:
 
@@ -12,28 +12,28 @@ This script is a *wrapper* around arbitrary programs to provide them with *remot
 3. **wait** for it to finish
 4. **close** the mount
 
-In this repository you can also find an example script `backup.sh` that uses `wrap-rclone-mount`. Using the backup program `restic`, it creates a backup of a remote location.
+In this repository you can also find an example script `backup.sh` that uses `serve-rclone-mount`. Using the backup program `restic`, it creates a backup of a remote location.
 
 
 
 ## Usage
 
 ```bash
-$ ./wrap-rclone-mount.sh [[rclone-flags...] --] <rclone-remote-path> <program> [program-args...]
+$ ./serve-rclone-mount.sh [[rclone-flags...] --] <rclone-remote-path> <program> [program-args...]
 ```
 
-When specifying rclone mount flags, make sure to finish them with a `--`. Otherwise, `wrap-rclone-mount` does not know where the flags end.
+When specifying rclone mount flags, make sure to finish them with a `--`. Otherwise, `serve-rclone-mount` does not know where the flags end.
 
 ## Examples
 
 ```bash
-$ ./wrap-rclone-mount.sh my-onedrive:foo/bar my-program -a --arg2 arg3
+$ ./serve-rclone-mount.sh my-onedrive:foo/bar my-program -a --arg2 arg3
 ```
 
 This will mount `my-onedrive:foo/bar` and execute `my-program -a --arg2 arg3` in the mount directory.
 
 ```bash
-$ ./wrap-rclone-mount.sh --config /path/to/rclone.conf -- my-onedrive:foo/bar my-program -a --arg2 arg3
+$ ./serve-rclone-mount.sh --config /path/to/rclone.conf -- my-onedrive:foo/bar my-program -a --arg2 arg3
 ```
 
 This will do the same, but read the remote configuration from `/path/to/rclone.conf` instead of the default config.
