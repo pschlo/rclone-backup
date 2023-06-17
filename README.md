@@ -9,7 +9,10 @@ Creates `restic` backups from `rclone` remotes
 $ ./backup.sh [--config rclone-config] [--script restic-script] rclone-remote-path restic-repo-path
 ```
 
-Before you can run the script, you need to set up an `rclone` remote that serves as the backup source. Set up a remote in the default config file by typing `rclone config`, or in a custom config file by typing `rclone --config /path/to/rclone.conf config` .
+To run the script, you need:
+
+1. an `rclone` remote that serves as the backup source. Set up a remote in the default config file by typing `rclone config`, or in a custom config file by typing `rclone --config /path/to/rclone.conf config` .
+2. a `restic` repository. Enter `restic init` to create one.
 
 
 
