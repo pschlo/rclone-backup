@@ -95,7 +95,7 @@ stop_mount () {
     fi
 
     # wait for TIMEOUT_MS millisecods for the mount process to terminate
-    TIMEOUT_MS=10000
+    TIMEOUT_MS=$((10*SECONDS))
     t0=$(timestamp_ms)
     is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
