@@ -23,7 +23,13 @@ timestamp_ms () {
     echo $(($(date +%s%N)/1000000))
 }
 
+is_alive() {
+    [[ ${MOUNT_PID+1} ]] && ps -p $MOUNT_PID >/dev/null
+}
 
+is_mounted() {
+    [[ ${MOUNT_PATH+1} ]] && mountpoint -q "$MOUNT_PATH"
+}
 
 
 
@@ -74,22 +80,12 @@ cleanup () {
     echo ""
     set +o errexit
     echo "cleaning up"
-    if [[ ${MOUNT_PID+1} ]]; then unmount; fi
-    # when mount process was killed, rm might fail
-    if [[ ${MOUNT_PATH+1} ]]; then
-        rm -d "$MOUNT_PATH"
-        if (($?>0)); then echo "ERROR: could not delete mount folder"; exit 1; fi
-    fi
-
+    stop_mount
+    delete_mount_dir
     set -o errexit
 }
 
-
-# requires MOUNT_PID to be set
-unmount () {
-    is_alive() { ps -p $MOUNT_PID >/dev/null; }
-    is_mounted() { mountpoint -q "$MOUNT_PATH"; }
-
+stop_mount () {
     if is_mounted; then
         umount "$MOUNT_PATH" 2>/dev/null
         if (($? > 0)); then
@@ -112,10 +108,16 @@ unmount () {
     return 0
 }
 
+delete_mount_dir () {
+    # when mount process was killed, rm might fail
+    if [[ ${MOUNT_PATH+1} ]]; then
+        rm -d "$MOUNT_PATH"
+        if (($?>0)); then echo "ERROR: could not delete mount folder"; exit 1; fi
+    fi
+}
+
 trap cleanup EXIT
 
-# create mount folder
-MOUNT_PATH="$(mktemp -d)"
 
 
 
@@ -127,6 +129,9 @@ MOUNT_PATH="$(mktemp -d)"
 # ---- MOUNTING ----
 
 echo "mounting remote $SOURCE_PATH"
+
+# create mount folder
+MOUNT_PATH="$(mktemp -d)"
 
 # launch fuse mount daemon
 
@@ -142,8 +147,6 @@ MOUNT_PID=$!
 # abort after TIMEOUT_MS milliseconds
 TIMEOUT_MS=$((10*SECONDS))
 t0=$(timestamp_ms)
-is_alive() { ps -p $MOUNT_PID >/dev/null; }
-is_mounted() { mountpoint -q "$MOUNT_PATH"; }
 is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
 while ! is_mounted && is_alive && ! is_timeout; do sleep 0.1; done
