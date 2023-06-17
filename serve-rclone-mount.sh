@@ -6,10 +6,6 @@
 #   3..     program arguments
 
 
-# ENVIRONMENT VARIABLES
-#   RCLONE_CONFIG
-
-
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
