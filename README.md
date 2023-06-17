@@ -5,7 +5,7 @@
 1. having a remote location mounted in the system all the time might be impractical if only a single process needs the mount
 2. after issuing `rclone mount`, it takes some unknown time before the mount actually becomes available
 
-This script is a *wrapper* around arbitrary programs to provide them with *remote files*. It works as follows:
+This script is a *wrapper* around arbitrary programs to provide them with *remote files*. It performs the following steps:
 
 1. **set up** a mount in a temporary directory and wait for it to become available
 2. **execute** the program in the mount directory
