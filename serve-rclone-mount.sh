@@ -27,6 +27,11 @@ is_mounted() {
     [[ ${MOUNT_PATH+1} ]] && mountpoint -q "$MOUNT_PATH"
 }
 
+is_temp_mount() {
+    [[ ! ${CUSTOM_MOUNTPOINT+1} ]];
+}
+
+
 
 
 
@@ -39,7 +44,8 @@ RCLONE_ARGS=()
 while [[ (($# > 0)) && $1 != "--" ]]; do
     case "$1" in
         "--mountpoint")
-            CUSTOM_MOUNTPOINT="$2"
+            if [[ ! ${2+1} ]]; then echo "ERROR: must specify mountpoint"; exit 1; fi
+            CUSTOM_MOUNTPOINT="$(realpath "$2")"
             shift
             shift
             ;;
@@ -103,12 +109,12 @@ stop_mount () {
             # Upon exit signal, bash first waits for the running command to finish and
             # then finishes itself. Thus, the process is dead already.
 
-            # kill might fail if mount process failed in the meantime
+            # kill might fail if mount process died in the meantime
             kill $MOUNT_PID 2>/dev/null
         fi
     else
         # not yet mounted
-        # kill might fail if mount process failed in the meantime
+        # kill might fail if mount process died in the meantime
         kill $MOUNT_PID 2>/dev/null
     fi
 
@@ -125,10 +131,10 @@ stop_mount () {
 }
 
 delete_mount_dir () {
-    # when mount process was killed, rm might fail
-    if [[ ${MOUNT_PATH+1} && ! ${CUSTOM_MOUNTPOINT+1} ]]; then
+    # when mount could not be unmounted, rm might fail
+    if [[ ${MOUNT_PATH+1} ]] && is_temp_mount; then
         rm -d "$MOUNT_PATH"
-        if (($?>0)); then echo "ERROR: could not delete mount folder"; exit 1; fi
+        if (($?>0)); then echo "ERROR: could not delete temporary mount folder"; exit 1; fi
     fi
 }
 
@@ -144,14 +150,21 @@ trap cleanup EXIT
 
 # ---- MOUNTING ----
 
-echo "mounting remote $SOURCE_PATH"
+if is_temp_mount; then
+    echo "mounting remote $SOURCE_PATH in temporary folder"
+else
+    echo "mounting remote $SOURCE_PATH in $CUSTOM_MOUNTPOINT"
+fi
 
 # create mount folder
-if [[ ${CUSTOM_MOUNTPOINT+1} ]]; then
-    mkdir -p "$CUSTOM_MOUNTPOINT"
-    MOUNT_PATH="$CUSTOM_MOUNTPOINT"
-else
+if is_temp_mount; then
     MOUNT_PATH="$(mktemp -d)"
+else
+    if [[ ! -d $CUSTOM_MOUNTPOINT ]]; then
+        echo "ERROR: mountpoint does not exit"
+        exit 1
+    fi
+    MOUNT_PATH="$CUSTOM_MOUNTPOINT"  
 fi
 
 # launch fuse mount daemon
@@ -161,6 +174,7 @@ args+=("$SOURCE_PATH" "$MOUNT_PATH")
 args+=("--read-only")
 args+=("${RCLONE_ARGS[@]}")
 
+# launch as daemon, but keep stdout connected to current terminal
 setsid rclone mount "${args[@]}" &
 MOUNT_PID=$!
 
@@ -196,5 +210,5 @@ echo "running $PROGRAM_PATH"
     export ORIGINAL_PWD="$PWD"
     # working directory for process is the mount folder
     cd "$MOUNT_PATH"
-    $PROGRAM_PATH "$@"
+    "$PROGRAM_PATH" "$@"
 )
