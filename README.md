@@ -1,5 +1,7 @@
 # serve-rclone-mount
 
+TODO: improve --mountpoint option: When should the mountpoint be deleted? Also mention it in README.
+
 `rclone` can mount remote file locations on the local machine. This is very useful, because programs can then interact with the remote files just like with local files. However:
 
 1. having a remote location mounted in the system all the time might be impractical if only a single process needs the mount
