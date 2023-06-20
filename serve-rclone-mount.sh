@@ -35,17 +35,26 @@ is_mounted() {
 
 # (no longer) adapted from https://stackoverflow.com/a/14203146
 
-KEYWORD_ARGS=()
+RCLONE_ARGS=()
 while [[ (($# > 0)) && $1 != "--" ]]; do
-    KEYWORD_ARGS+=("$1")
-    shift
+    case "$1" in
+        "--mountpoint")
+            CUSTOM_MOUNTPOINT="$2"
+            shift
+            shift
+            ;;
+        *)
+            RCLONE_ARGS+=("$1")
+            shift
+            ;;
+    esac
 done
 
 if (($# == 0)); then
     # missing -- delimiter
     # assume that no rclone args were passed
-    set -- "${KEYWORD_ARGS[@]}"
-    KEYWORD_ARGS=()
+    set -- "${RCLONE_ARGS[@]}"
+    RCLONE_ARGS=()
 else
     # remove -- delimiter
     shift
@@ -55,7 +64,7 @@ if (($# < 2)); then echo "ERROR: Expected at least 2 positional arguments, but $
 SOURCE_PATH="$1"  # path on source, e.g. server
 shift
 
-# path to restic repository
+# path to program
 PROGRAM_PATH="$1"
 shift
 if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
@@ -117,7 +126,7 @@ stop_mount () {
 
 delete_mount_dir () {
     # when mount process was killed, rm might fail
-    if [[ ${MOUNT_PATH+1} ]]; then
+    if [[ ${MOUNT_PATH+1} && ! ${CUSTOM_MOUNTPOINT+1} ]]; then
         rm -d "$MOUNT_PATH"
         if (($?>0)); then echo "ERROR: could not delete mount folder"; exit 1; fi
     fi
@@ -138,14 +147,19 @@ trap cleanup EXIT
 echo "mounting remote $SOURCE_PATH"
 
 # create mount folder
-MOUNT_PATH="$(mktemp -d)"
+if [[ ${CUSTOM_MOUNTPOINT+1} ]]; then
+    mkdir -p "$CUSTOM_MOUNTPOINT"
+    MOUNT_PATH="$CUSTOM_MOUNTPOINT"
+else
+    MOUNT_PATH="$(mktemp -d)"
+fi
 
 # launch fuse mount daemon
 
 args=()
 args+=("$SOURCE_PATH" "$MOUNT_PATH")
 args+=("--read-only")
-args+=("${KEYWORD_ARGS[@]}")
+args+=("${RCLONE_ARGS[@]}")
 
 setsid rclone mount "${args[@]}" &
 MOUNT_PID=$!
