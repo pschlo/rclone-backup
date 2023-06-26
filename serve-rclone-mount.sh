@@ -87,14 +87,26 @@ fi
 # ---- CLEANUP FUNCTIONS ----
 
 # define function to be run at exit
+# if the script does not exit during cleanup, then the exit code from before cleanup was called is returned
+# if the script exits during cleanup, then that is returned instead
+# thus: do NOT exit during cleanup
 cleanup () {
-    echo ""
-    echo ""
+    retval=$?
+    # disable exit on failure
     set +o errexit
+    echo ""
+    echo ""
     # echo "cleaning up"
+    if [[ ${ORIGINAL_PWD+1} ]]; then cd "$ORIGINAL_PWD"; fi
     stop_mount
+    if (($?>0)); then exit 101; fi
     delete_mount_dir
-    set -o errexit
+    if (($?>0)); then exit 102; fi
+    if [[ ${IS_PROGRAM_LAUNCHED+1} ]]; then
+        exit $retval
+    else
+        exit $((retval+100))
+    fi
 }
 
 stop_mount () {
@@ -125,7 +137,7 @@ stop_mount () {
     is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
     while is_alive && ! is_timeout; do sleep 0.1; done
-    if is_alive; then echo "ERROR: Could not terminate mount process"; exit 1; fi
+    if is_alive; then echo "ERROR: Could not terminate mount process"; return 1; fi
     echo "mount stopped"
     return 0
 }
@@ -134,8 +146,9 @@ delete_mount_dir () {
     # when mount could not be unmounted, rm might fail
     if [[ ${MOUNT_PATH+1} ]] && is_temp_mount; then
         rm -d "$MOUNT_PATH"
-        if (($?>0)); then echo "ERROR: could not delete temporary mount folder"; exit 1; fi
+        if (($?>0)); then echo "ERROR: could not delete temporary mount folder"; return 1; fi
     fi
+    return 0
 }
 
 trap cleanup EXIT
@@ -205,10 +218,11 @@ echo "mount successful"
 # ---- RUNNING THE PROGRAM  ----
 echo "running $PROGRAM_PATH"
 
-(
-    # process should be able to access the original working directory (where this script was executed in)
-    export ORIGINAL_PWD="$PWD"
-    # working directory for process is the mount folder
-    cd "$MOUNT_PATH"
-    "$PROGRAM_PATH" "$@"
-)
+# process should be able to access the original working directory (where this script was executed in)
+export ORIGINAL_PWD="$PWD"
+# working directory for process is the mount folder
+cd "$MOUNT_PATH"
+IS_PROGRAM_LAUNCHED=1
+"$PROGRAM_PATH" "$@" && true
+# exit with return code of executed program
+exit $?
