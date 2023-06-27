@@ -257,6 +257,7 @@ if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 1
 # this happens e.g. when rclone mounts an invalid path
 if [[ ! "$(ls -A "$MOUNT_PATH")" ]]; then
     # empty
+    echo $(is_mounted)
     echo "ERROR: mount is empty"
     exit 1
 fi
