@@ -6,15 +6,9 @@
 #   3..     program arguments
 
 # EXIT CODES
-# 0..87        program was executed and exited with resp. code
-# 126          program/script cannot execute
-# 127          program/script not found
-# 129..165     program/script terminated due to signal
-# 166..253     program was executed, but cleanup failed. Program exited with <exitcode>-166.
-# 254          program was NOT executed, likey because an error ocurred. Cleanup may or may not have been successful.
+# 0..254    program was executed and exited with resp. code
+# 255       an unspecified error occurred. The program may or may not have been executed
 
-# for special bash exit codes between 126 and 165, see https://tldp.org/LDP/abs/html/exitcodes.html
-# note that for special exit codes, you cannot tell whether the program was executed or if cleanup was successful
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
@@ -27,7 +21,7 @@ ORIGINAL_PWD="$PWD"
 # see https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html
 # for numbers, see trap -l
 for i in 15 2 3 9 1; do
-    trap "exit $((128+$i))" $i
+    trap "exit 255" $i
 done
 
 
@@ -118,44 +112,25 @@ exit_handler () {
     set +o errexit
     echo ""
     echo ""
-
-    # truncate invalid exit codes
-    if (($retval>87)) && ! is_special_exit $retval; then
-        # truncate
-        echo "WARN: exit code $retval is too large, truncating to 87"
-        retval=87
-    fi
-
     if [[ ${IS_LAUNCHED+1} ]]; then
         echo "program finished"
     else
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
             echo "ERROR: program was not executed"
-            retval=254
-        elif is_special_exit $retval; then
+        elif ((retval==255)); then
             echo "ERROR: program was not launched: shell error or received exit signal"
         else
             echo "ERROR: program was not launched: an error occurred"
-            retval=254
         fi
+        retval=255
     fi
-
     cleanup
 }
 
-is_special_exit () {
-    (($1>=126)) && (($1<=165))
-}
-
-
 cleanup_err () {
     echo "ERROR: cleanup failed"
-    if ((retval<=87)); then
-        exit $((retval+166))
-    else
-        exit $retval
-    fi
+    exit 255
 }
 
 # requires $retval
