@@ -6,10 +6,14 @@
 #   3..     program arguments
 
 # EXIT CODES
-# 0..99        program was executed and exited with resp. code
-# 100..199     an error occurred during cleanup, but the program was lauched and exited with <exitcode>-100.
-# 200          an error ocurred before the program could be launched. Cleanup may or may not have been successful.
+# 0..87        program was executed and exited with resp. code
+# 126          program/script cannot execute
+# 127          program/script not found
+# 129..165     program/script terminated due to signal
+# 166..253     an error occurred during cleanup, but the program was lauched and exited with <exitcode>-166.
+# 254          an error ocurred before the program could be launched. Cleanup may or may not have been successful.
 
+# for special bash exit codes between 126 and 165, see https://tldp.org/LDP/abs/html/exitcodes.html
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
@@ -106,9 +110,9 @@ cleanup () {
     cleanup_err () {
         echo "ERROR: cleanup failed"
         if [[ ${IS_LAUNCHED+1} ]]; then
-            exit $((100+retval))
+            exit $((retval+166))
         else
-            exit 200
+            exit 254
         fi
     }
 
@@ -131,7 +135,7 @@ cleanup () {
     if [[ ${IS_LAUNCHED+1} ]]; then
         exit $retval
     else
-        exit 200
+        exit 254
     fi
 }
 
