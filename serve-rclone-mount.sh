@@ -14,6 +14,7 @@
 # 254          an error ocurred before the program could be launched. Cleanup may or may not have been successful.
 
 # for special bash exit codes between 126 and 165, see https://tldp.org/LDP/abs/html/exitcodes.html
+# note that for special exit codes, you cannot tell whether cleanup was successful
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
@@ -99,25 +100,6 @@ fi
 
 
 
-# requires "retval" to be set
-# $1: offset (0 if none, 1 if shifted by 166)
-check_retval () {
-    if [[ ! ${IS_LAUNCHED+1} ]]; then exit 254; fi
-
-    if ((retval>=126)) && ((retval<=165)); then
-        echo "special exit code $retval is passed on"
-        exit $retval
-    elif ((retval>87)); then
-        echo "WARN: exit code $retval is too large, truncating to 87"
-        retval=87
-    fi
-    if [[ $1=="1" ]]; then
-        exit $((retval+166))
-    else
-        exit $retval
-    fi
-}
-
 
 
 
@@ -136,26 +118,45 @@ cleanup () {
 
     cleanup_err () {
         echo "ERROR: cleanup failed"
-        check_retval 1
+        if ((retval<=87)); then
+            exit $((retval+166))
+        else
+            exit $retval
+        fi
     }
+
+    # truncate invalid exit codes
+    if (($retval>87)) && ! is_special_exit $retval; then
+        # truncate
+        echo "WARN: exit code $retval is too large, truncating to 87"
+        retval=87
+    fi
 
     if [[ ${IS_LAUNCHED+1} ]]; then
         echo "program finished"
     else
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
-            echo "program was not executed"
+            echo "WARN: program was not executed"
+        elif is_special_exit $retval; then
+            echo "ERROR: program was not launched: shell error or received exit signal"
         else
-            echo "ERROR: An error occurred before the program could be launched"
+            echo "ERROR: program was not launched: an error occurred"
         fi
+        retval=254
     fi
+
 
     # echo "cleaning up"
     cd "$ORIGINAL_PWD" || cleanup_err
     stop_mount || cleanup_err
     delete_mount_dir || cleanup_err
 
-    check_retval 0
+    exit $retval
+}
+
+is_special_exit () {
+    (($1>=126)) && (($1<=165))
 }
 
 stop_mount () {
