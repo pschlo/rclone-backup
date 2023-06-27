@@ -119,7 +119,7 @@ exit_handler () {
             # this means that exit 0 was called before the program was started, which should NOT happen
             echo "ERROR: program was not executed"
         elif ((retval==255)); then
-            echo "ERROR: program was not launched: shell error or received exit signal"
+            echo "ERROR: program was not launched: shell error or exit signal"
         else
             echo "ERROR: program was not launched: an error occurred"
         fi
