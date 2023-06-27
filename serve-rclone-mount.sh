@@ -110,6 +110,10 @@ cleanup () {
     cleanup_err () {
         echo "ERROR: cleanup failed"
         if [[ ${IS_LAUNCHED+1} ]]; then
+            if ((retval>87)); then
+                echo "exit code too large, truncating to 87"
+                retval=87
+            fi
             exit $((retval+166))
         else
             exit 254
@@ -133,6 +137,10 @@ cleanup () {
     delete_mount_dir || cleanup_err
 
     if [[ ${IS_LAUNCHED+1} ]]; then
+        if ((retval>87)); then
+            echo "exit code too large, truncating to 87"
+            retval=87
+        fi
         exit $retval
     else
         exit 254
