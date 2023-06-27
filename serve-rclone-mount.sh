@@ -21,13 +21,14 @@ set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 ORIGINAL_PWD="$PWD"
 
+
 # for a received signal, this script should return the canonical code
 # otherwise, sending e.g. SIGINT would make the script exit with code 0
-# a noop suffices here
-for ((i=1; i<=40; i++)); do
-    eval "trap : $i"
+# see https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html
+# for numbers, see trap -l
+for i in 15 2 3 9 1; do
+    trap "exit $((128+$i))" $i
 done
-
 
 
 
@@ -109,6 +110,8 @@ fi
 # if the script does not exit during cleanup, then the exit code from before cleanup was called is returned
 # if the script exits during cleanup, then that is returned instead
 # thus: do NOT exit during cleanup
+# NOTE: if we do not trap signals explicitly, retval is 0 if e.g. SIGINT is received.
+# The exit code would then be silently overridden after cleanup
 cleanup () {
     retval=$?
     # disable exit on failure
@@ -137,7 +140,7 @@ cleanup () {
     else
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
-            echo "WARN: program was not executed"
+            echo "ERROR: program was not executed"
             retval=254
         elif is_special_exit $retval; then
             echo "ERROR: program was not launched: shell error or received exit signal"
@@ -257,7 +260,6 @@ if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 1
 # this happens e.g. when rclone mounts an invalid path
 if [[ ! "$(ls -A "$MOUNT_PATH")" ]]; then
     # empty
-    is_mounted; echo $?
     echo "ERROR: mount is empty"
     exit 1
 fi
