@@ -219,7 +219,7 @@ else
         echo "ERROR: mountpoint does not exit"
         exit 1
     fi
-    MOUNT_PATH="$CUSTOM_MOUNTPOINT"  
+    MOUNT_PATH="$CUSTOM_MOUNTPOINT"
 fi
 
 # launch fuse mount daemon
