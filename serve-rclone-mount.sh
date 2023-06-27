@@ -90,6 +90,16 @@ fi
 
 
 
+# requires "retval" to be set
+check_retval () {
+    if ((retval>=126)) && ((retval<=165)); then
+        echo "special exit code $retval is passed on"
+        exit $retval
+    elif ((retval>87)); then
+        echo "WARN: exit code $retval is too large, truncating to 87"
+        retval=87
+    fi
+}
 
 
 
@@ -110,10 +120,7 @@ cleanup () {
     cleanup_err () {
         echo "ERROR: cleanup failed"
         if [[ ${IS_LAUNCHED+1} ]]; then
-            if ((retval>87)); then
-                echo "WARN: exit code $retval is too large, truncating to 87"
-                retval=87
-            fi
+            check_retval
             exit $((retval+166))
         else
             exit 254
@@ -137,10 +144,7 @@ cleanup () {
     delete_mount_dir || cleanup_err
 
     if [[ ${IS_LAUNCHED+1} ]]; then
-        if ((retval>87)); then
-            echo "WARN: exit code $retval is too large, truncating to 87"
-            retval=87
-        fi
+        check_retval
         exit $retval
     else
         exit 254
