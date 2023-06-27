@@ -111,7 +111,7 @@ cleanup () {
         echo "ERROR: cleanup failed"
         if [[ ${IS_LAUNCHED+1} ]]; then
             if ((retval>87)); then
-                echo "exit code too large, truncating to 87"
+                echo "WARN: exit code $retval is too large, truncating to 87"
                 retval=87
             fi
             exit $((retval+166))
@@ -138,7 +138,7 @@ cleanup () {
 
     if [[ ${IS_LAUNCHED+1} ]]; then
         if ((retval>87)); then
-            echo "exit code too large, truncating to 87"
+            echo "WARN: exit code $retval is too large, truncating to 87"
             retval=87
         fi
         exit $retval
@@ -153,7 +153,7 @@ stop_mount () {
     if is_mounted; then
         umount "$MOUNT_PATH" 2>/dev/null
         if (($? > 0)); then
-            echo "unmounting failed; killing mount process"
+            echo "WARN: unmounting failed; killing mount process"
             # we could *wait* for processes to finish their business with the mount dir,
             # but this script assumes that a *single* process is accessing the mount.
             # Upon exit signal, bash first waits for the running command to finish and
