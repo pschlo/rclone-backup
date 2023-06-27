@@ -5,10 +5,16 @@
 #   2       program path
 #   3..     program arguments
 
+# EXIT CODES
+# 0..99        program was executed and exited with resp. code
+# 100..199     an error occurred during cleanup, but the program was lauched and exited with <exitcode>-100.
+# 200          an error ocurred before the program could be launched. Cleanup may or may not have been successful.
+
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
+ORIGINAL_PWD="$PWD"
 
 
 # ---- UTILS ----
@@ -96,16 +102,36 @@ cleanup () {
     set +o errexit
     echo ""
     echo ""
+
+    cleanup_err () {
+        echo "ERROR: cleanup failed"
+        if [[ ${IS_LAUNCHED+1} ]]; then
+            exit $((100+retval))
+        else
+            exit 200
+        fi
+    }
+
+    if [[ ${IS_LAUNCHED+1} ]]; then
+        echo "program finished"
+    else
+        if ((retval==0)); then
+            # this means that exit 0 was called before the program was started, which should NOT happen
+            echo "program was not executed"
+        else
+            echo "ERROR: An error occurred before the program could be launched"
+        fi
+    fi
+
     # echo "cleaning up"
-    if [[ ${ORIGINAL_PWD+1} ]]; then cd "$ORIGINAL_PWD"; fi
-    stop_mount
-    if (($?>0)); then exit 101; fi
-    delete_mount_dir
-    if (($?>0)); then exit 102; fi
-    if [[ ${IS_PROGRAM_LAUNCHED+1} ]]; then
+    cd "$ORIGINAL_PWD" || cleanup_err
+    stop_mount || cleanup_err
+    delete_mount_dir || cleanup_err
+
+    if [[ ${IS_LAUNCHED+1} ]]; then
         exit $retval
     else
-        exit $((retval+100))
+        exit 200
     fi
 }
 
@@ -219,10 +245,10 @@ echo "mount successful"
 echo "running $PROGRAM_PATH"
 
 # process should be able to access the original working directory (where this script was executed in)
-export ORIGINAL_PWD="$PWD"
+export ORIGINAL_PWD
 # working directory for process is the mount folder
 cd "$MOUNT_PATH"
-IS_PROGRAM_LAUNCHED=1
+IS_LAUNCHED=1
 "$PROGRAM_PATH" "$@" && true
 # exit with return code of executed program
 exit $?
