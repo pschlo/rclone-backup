@@ -20,6 +20,15 @@ set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 ORIGINAL_PWD="$PWD"
 
+# for a received signal, the canonical code should be returned
+# otherwise, sending e.g. SIGINT would make the script exit with code 0
+# a noop suffices here
+for ((i=1; i<=40; i++)); do
+    eval "trap : $i"
+done
+
+
+
 
 # ---- UTILS ----
 
@@ -91,13 +100,21 @@ fi
 
 
 # requires "retval" to be set
+# $1: offset (0 if none, 1 if shifted by 166)
 check_retval () {
+    if [[ ! ${IS_LAUNCHED+1} ]]; then exit 254; fi
+
     if ((retval>=126)) && ((retval<=165)); then
         echo "special exit code $retval is passed on"
         exit $retval
     elif ((retval>87)); then
         echo "WARN: exit code $retval is too large, truncating to 87"
         retval=87
+    fi
+    if [[ $1=="1" ]]; then
+        exit $((retval+166))
+    else
+        exit $retval
     fi
 }
 
@@ -119,12 +136,7 @@ cleanup () {
 
     cleanup_err () {
         echo "ERROR: cleanup failed"
-        if [[ ${IS_LAUNCHED+1} ]]; then
-            check_retval
-            exit $((retval+166))
-        else
-            exit 254
-        fi
+        check_retval 1
     }
 
     if [[ ${IS_LAUNCHED+1} ]]; then
@@ -143,12 +155,7 @@ cleanup () {
     stop_mount || cleanup_err
     delete_mount_dir || cleanup_err
 
-    if [[ ${IS_LAUNCHED+1} ]]; then
-        check_retval
-        exit $retval
-    else
-        exit 254
-    fi
+    check_retval 0
 }
 
 stop_mount () {
