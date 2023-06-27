@@ -10,18 +10,18 @@
 # 126          program/script cannot execute
 # 127          program/script not found
 # 129..165     program/script terminated due to signal
-# 166..253     an error occurred during cleanup, but the program was lauched and exited with <exitcode>-166.
-# 254          an error ocurred before the program could be launched. Cleanup may or may not have been successful.
+# 166..253     program was executed, but cleanup failed. Program exited with <exitcode>-166.
+# 254          program was NOT executed, likey because an error ocurred. Cleanup may or may not have been successful.
 
 # for special bash exit codes between 126 and 165, see https://tldp.org/LDP/abs/html/exitcodes.html
-# note that for special exit codes, you cannot tell whether cleanup was successful
+# note that for special exit codes, you cannot tell whether the program was executed or if cleanup was successful
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 ORIGINAL_PWD="$PWD"
 
-# for a received signal, the canonical code should be returned
+# for a received signal, this script should return the canonical code
 # otherwise, sending e.g. SIGINT would make the script exit with code 0
 # a noop suffices here
 for ((i=1; i<=40; i++)); do
@@ -138,12 +138,13 @@ cleanup () {
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
             echo "WARN: program was not executed"
+            retval=254
         elif is_special_exit $retval; then
             echo "ERROR: program was not launched: shell error or received exit signal"
         else
             echo "ERROR: program was not launched: an error occurred"
+            retval=254
         fi
-        retval=254
     fi
 
 
