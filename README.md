@@ -1,6 +1,6 @@
 # serve-rclone-mount
 
-TODO: mention --mountpoint in README.
+TODO: mention --mountpoint and exit codes in README.
 
 `rclone` can mount remote file locations on the local machine. This is very useful, because programs can then interact with the remote files just like with local files. However:
 
