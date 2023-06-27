@@ -112,21 +112,12 @@ fi
 # thus: do NOT exit during cleanup
 # NOTE: if we do not trap signals explicitly, retval is 0 if e.g. SIGINT is received.
 # The exit code would then be silently overridden after cleanup
-cleanup () {
+exit_handler () {
     retval=$?
     # disable exit on failure
     set +o errexit
     echo ""
     echo ""
-
-    cleanup_err () {
-        echo "ERROR: cleanup failed"
-        if ((retval<=87)); then
-            exit $((retval+166))
-        else
-            exit $retval
-        fi
-    }
 
     # truncate invalid exit codes
     if (($retval>87)) && ! is_special_exit $retval; then
@@ -150,17 +141,30 @@ cleanup () {
         fi
     fi
 
-
-    # echo "cleaning up"
-    cd "$ORIGINAL_PWD" || cleanup_err
-    stop_mount || cleanup_err
-    delete_mount_dir || cleanup_err
-
-    exit $retval
+    cleanup
 }
 
 is_special_exit () {
     (($1>=126)) && (($1<=165))
+}
+
+
+cleanup_err () {
+    echo "ERROR: cleanup failed"
+    if ((retval<=87)); then
+        exit $((retval+166))
+    else
+        exit $retval
+    fi
+}
+
+# requires $retval
+cleanup () {
+    # echo "cleaning up"
+    cd "$ORIGINAL_PWD" || cleanup_err
+    stop_mount || cleanup_err
+    delete_mount_dir || cleanup_err
+    exit $retval
 }
 
 stop_mount () {
@@ -205,7 +209,7 @@ delete_mount_dir () {
     return 0
 }
 
-trap cleanup EXIT
+trap exit_handler EXIT
 
 
 
