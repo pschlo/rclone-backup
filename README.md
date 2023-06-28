@@ -1,7 +1,5 @@
 # serve-rclone-mount
 
-TODO: mention --mountpoint and exit codes in README.
-
 `rclone` can mount remote file locations on the local machine. This is very useful, because programs can then interact with the remote files just like with local files. However:
 
 1. having a remote location mounted in the system all the time might be impractical if only a single process needs the mount
@@ -81,3 +79,10 @@ $ ./backup.sh <rclone-remote-path> <restic-repository-path>
     ```
 
     In this example, a second rclone remote `backup-server` has been configured beforehand.
+
+
+
+## TODO
+
+* mention --mountpoint and exit codes in README.
+* see https://unix.stackexchange.com/a/230568 and https://unix.stackexchange.com/a/386856
