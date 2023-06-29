@@ -20,6 +20,7 @@
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
+set -o errtrace
 source "./mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 
@@ -94,12 +95,19 @@ fi
 
 # define function to be run at exit
 # retval is either set by an 'exit' statement, or is 255 because a signal handler was called.
+# NOTE: if interrupt signal is received during cleanup, signal handler is called again, but does not call exit handler
+
 exit_handler () {
     retval=$?
-    # disable exit on failure
-    set +o errexit
-    echo ""
+    # define handler for when cleanup fails
+    # note that it is not possible trap EXIT inside of exit handler
+    err_handler () {
+        echo "ERROR: cleanup failed"
+        exit 255
+    }
+    trap err_handler ERR
 
+    echo ""
     if [[ ${IS_LAUNCHED+1} ]]; then
         if ((retval==255)); then
             # either the program exited with code 255 or a signal handler was called
@@ -121,26 +129,20 @@ exit_handler () {
         fi
         retval=255
     fi
+
     # retval is now either the exit code of the program, a special exit code, or 255.
-    cleanup || retval=255
+    cleanup
     exit $retval
 }
 
 
 cleanup () {
-    err () { echo "ERROR: cleanup failed"; }
-    # echo "cleaning up"
-    {
-        cd "$ORIGINAL_PWD" &&
-        if [[ ${MOUNT_PID+1} ]]; then
-            stop_mount $MOUNT_PID "$MOUNT_PATH" &&
-            delete_mount_dir
-        fi
-    } || { err; return 1; }
-    return 0
+    cd "$ORIGINAL_PWD"
+    if [[ ${MOUNT_PID+1} ]]; then
+        stop_mount $MOUNT_PID "$MOUNT_PATH"
+        delete_mount_dir
+    fi
 }
-
-
 
 delete_mount_dir () {
     # when mount could not be unmounted, rm might fail
