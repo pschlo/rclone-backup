@@ -6,15 +6,16 @@
 #   3..     program arguments
 
 # EXIT CODES
-# 0..125    program was executed and exited with resp. code
-# 126       cannot execute program
-# 127       program was not found
-# 128       invalid exit argument
-# 128+n     received signal n
-# 255       the program was not executed, likely because an error occurred before
+#   In general, the exit code of the program is returned.
+#   However, the following exit codes can also be returned under other circumstances:
+#       126     cannot execute program
+#       127     program was not found
+#       128     invalid exit argument
+#       255     program was not executed or exit signal has been received
 
-# see https://tldp.org/LDP/abs/html/exitcodes.html
-# NOTE: for exit codes greater than 125, you CANNOT tell whether the program returned this code of if the special condition was met
+# see also https://tldp.org/LDP/abs/html/exitcodes.html
+
+
 
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
@@ -44,7 +45,14 @@ is_temp_mount() {
 }
 
 
-
+# by default, the script should not terminate from signals
+for ((i=0; i<40; i++)); do
+    trap : $i
+done
+# terminate from these signals
+for signal in TERM INT QUIT KILL HUP PIPE; do
+    trap "exit 255" $signal
+done
 
 
 
@@ -56,7 +64,7 @@ RCLONE_ARGS=()
 while [[ (($# > 0)) && $1 != "--" ]]; do
     case "$1" in
         "--mountpoint")
-            if [[ ! ${2+1} ]]; then echo "ERROR: must specify mountpoint"; exit 1; fi
+            if [[ ! ${2+1} ]]; then echo "ERROR: must specify mountpoint"; exit 255; fi
             CUSTOM_MOUNTPOINT="$(realpath "$2")"
             shift
             shift
@@ -78,7 +86,7 @@ else
     shift
 fi
 
-if (($# < 2)); then echo "ERROR: Expected at least 2 positional arguments, but $# where given"; exit 1; fi
+if (($# < 2)); then echo "ERROR: Expected at least 2 positional arguments, but $# where given"; exit 255; fi
 SOURCE_PATH="$1"  # path on source, e.g. server
 shift
 
@@ -98,28 +106,20 @@ fi
 # ---- CLEANUP FUNCTIONS ----
 
 # define function to be run at exit
-
-# NOTE: retval is the exit code of the last command that *exited*.
-# This means that if the program is running and SIGINT is received and the program does *not* exit e.g. by trapping SIGINT,
-# then retval is the exit code of the command *before* the program
-
-# NOTE: if a signal was received by the script, then after the exit handler finishes, the exit code is silently overridden with the specific signal code
-
+# retval is either set by an 'exit' statement, or is 255 because a signal handler was called.
 exit_handler () {
     retval=$?
     # disable exit on failure
     set +o errexit
     echo ""
-    echo ""
-    # filter out exits that happened before the program was launched
+
     if [[ ${IS_LAUNCHED+1} ]]; then
         if ((retval==255)); then
-            # either the program exited with code 255, or the program did not exit and the 255 is from the previous command
-            # if program did not exit, a signal was received and exit code will be overridden with special signal code
+            # either the program exited with code 255 or a signal handler was called
             echo "WARN: program either finished with code 255 or has been aborted"
         else
             # program exited
-            # exit code will be program exit code, or special exit code like 126, 127 or 128
+            # exit code will be either program exit code or special exit code like 126, 127 or 128
             echo "program has finished with code $retval"
         fi
     else
@@ -127,6 +127,8 @@ exit_handler () {
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
             echo "ERROR: program was not launched"
+        elif ((retval==255)); then
+            echo "ERROR: program was not launched: received exit signal"
         else
             echo "ERROR: program was not launched: an error occurred"
         fi
@@ -214,8 +216,8 @@ if is_temp_mount; then
     MOUNT_PATH="$(mktemp -d)"
 else
     if [[ ! -d $CUSTOM_MOUNTPOINT ]]; then
-        echo "ERROR: mountpoint does not exit"
-        exit 1
+        echo "ERROR: mountpoint does not exist"
+        exit 255
     fi
     MOUNT_PATH="$CUSTOM_MOUNTPOINT"
 fi
@@ -238,8 +240,8 @@ t0=$(timestamp_ms)
 is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
 while ! is_mounted && is_alive && ! is_timeout; do sleep 0.1; done
-if ! is_alive; then echo "ERROR: rclone mount stopped"; exit 1; fi
-if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 1; fi
+if ! is_alive; then echo "ERROR: rclone mount stopped"; exit 255; fi
+if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 255; fi
 
 # successfully mounted
 # do not allow empty mount dir
@@ -247,7 +249,7 @@ if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 1
 if [[ ! "$(ls -A "$MOUNT_PATH")" ]]; then
     # empty
     echo "ERROR: mount is empty"
-    exit 1
+    exit 255
 fi
 echo "mount successful"
 
@@ -257,16 +259,16 @@ echo "mount successful"
 
 # ---- RUNNING THE PROGRAM  ----
 echo "launching $PROGRAM_PATH"
+echo ""
 
 # process should be able to access the original working directory (where this script was executed in)
 export ORIGINAL_PWD
 # working directory for process is the mount folder
 cd "$MOUNT_PATH"
 IS_LAUNCHED=1
-# execute dummy command with exit code 255 so that the exit handler can detect if the program exited or was aborted
-( exit 255 ) && true
 "$PROGRAM_PATH" "$@" && true
-# if the program receives a signal and notifies its parent, i.e. this script (e.g. by not trapping the signal), then the exit handler is called immediately.
-# Otherwise, the script proceeds to the next line and exits with the resp. exit code
-# this is simply how the default bash signal handler works, which we implicitly use in this script by not trapping the signals
+# if both this script and the program receive a signal, then once the program terminates, the script signal handler is called
+# it thus does not matter what the program does or what it returns
+# if only the program receives a signal, then either a) the program handles it and exits, which is just like a normal exit,
+# or b) it notifies its parent (i.e. this script) about it, which then calls its script handler
 exit $?
