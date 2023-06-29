@@ -20,25 +20,12 @@
 set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
+source "./mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 
 
 
 # ---- UTILS ----
-
-SECONDS=1000
-# current timestamp in milliseconds; see https://serverfault.com/a/151112
-timestamp_ms () {
-    echo $(($(date +%s%N)/1000000))
-}
-
-is_alive() {
-    [[ ${MOUNT_PID+1} ]] && ps -p $MOUNT_PID >/dev/null
-}
-
-is_mounted() {
-    [[ ${MOUNT_PATH+1} ]] && mountpoint -q "$MOUNT_PATH"
-}
 
 is_temp_mount() {
     [[ ! ${CUSTOM_MOUNTPOINT+1} ]];
@@ -145,48 +132,19 @@ cleanup () {
     # echo "cleaning up"
     {
         cd "$ORIGINAL_PWD" &&
-        stop_mount &&
-        delete_mount_dir
+        if [[ ${MOUNT_PID+1} ]]; then
+            stop_mount $MOUNT_PID "$MOUNT_PATH" &&
+            delete_mount_dir
+        fi
     } || { err; return 1; }
     return 0
 }
 
-stop_mount () {
-    if ! is_alive; then return 0; fi
 
-    if is_mounted; then
-        umount "$MOUNT_PATH" 2>/dev/null
-        if (($? > 0)); then
-            echo "WARN: unmounting failed; killing mount process"
-            # we could *wait* for processes to finish their business with the mount dir,
-            # but this script assumes that a *single* process is accessing the mount.
-            # Upon exit signal, bash first waits for the running command to finish and
-            # then finishes itself. Thus, the process is dead already.
-
-            # kill might fail if mount process died in the meantime
-            kill $MOUNT_PID 2>/dev/null
-        fi
-    else
-        # not yet mounted
-        # kill might fail if mount process died in the meantime
-        kill $MOUNT_PID 2>/dev/null
-    fi
-
-    echo "waiting for mount to stop"
-    # wait for TIMEOUT_MS millisecods for the mount process to terminate
-    TIMEOUT_MS=$((10*SECONDS))
-    t0=$(timestamp_ms)
-    is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
-
-    while is_alive && ! is_timeout; do sleep 0.1; done
-    if is_alive; then echo "ERROR: Could not terminate mount process"; return 1; fi
-    echo "mount stopped"
-    return 0
-}
 
 delete_mount_dir () {
     # when mount could not be unmounted, rm might fail
-    if [[ ${MOUNT_PATH+1} ]] && is_temp_mount; then
+    if is_temp_mount; then
         rm -d "$MOUNT_PATH"
         if (($?>0)); then echo "ERROR: could not delete temporary mount folder"; return 1; fi
     fi
@@ -234,14 +192,7 @@ setsid rclone mount "${args[@]}" &
 MOUNT_PID=$!
 
 # wait until mount becomes available
-# abort after TIMEOUT_MS milliseconds
-TIMEOUT_MS=$((10*SECONDS))
-t0=$(timestamp_ms)
-is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
-
-while ! is_mounted && is_alive && ! is_timeout; do sleep 0.1; done
-if ! is_alive; then echo "ERROR: rclone mount stopped"; exit 255; fi
-if is_timeout && ! is_mounted; then echo "ERROR: rclone mount timed out"; exit 255; fi
+wait_mount $MOUNT_PID "$MOUNT_PATH"
 
 # successfully mounted
 # do not allow empty mount dir
