@@ -11,7 +11,7 @@
 #       126     cannot execute program
 #       127     program was not found
 #       128     invalid exit argument
-#       255     program was not executed or exit signal has been received
+#       255     program was not executed or exit signal has been received or cleanup failed
 
 # see also https://tldp.org/LDP/abs/html/exitcodes.html
 
