@@ -24,7 +24,7 @@ stop_mount () {
     if [[ ${3+x} ]]; then
         TIMEOUT_SECS="$3"
     else
-        TIMEOUT_SECS=5
+        TIMEOUT_SECS=10
     fi
 
     if ! is_alive; then return 0; fi
@@ -62,11 +62,12 @@ stop_mount () {
 wait_mount () {
     MOUNT_PID=$1
     MOUNT_PATH="$2"
+    mount_str="${MOUNT_PID}@$(basename "$MOUNT_PATH")"
 
     if [[ ${3+x} ]]; then
         TIMEOUT_SECS="$3"
     else
-        TIMEOUT_SECS=5
+        TIMEOUT_SECS=10
     fi
 
     TIMEOUT_MS=$((TIMEOUT_SECS*SECONDS))
