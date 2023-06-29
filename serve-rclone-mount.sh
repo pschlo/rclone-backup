@@ -22,22 +22,6 @@ set -o pipefail  # don't hide errors within pipes
 ORIGINAL_PWD="$PWD"
 
 
-# for signal in SIGTERM SIGINT SIGQUIT SIGKILL SIGHUP; do
-#     trap "signal_handler $signal" $signal
-# done
-
-# $1: signal name
-# signal_handler () {
-#     set +o errexit
-#     signal=$1
-#     echo "interrupted by $signal"
-#     cleanup
-#     trap - $signal      # restore default handler to avoid infinite loop
-#     trap - EXIT
-#     kill -s $signal $$  # report to parent that we have been interrupted
-# }
-
-
 
 # ---- UTILS ----
 
