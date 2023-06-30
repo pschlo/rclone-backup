@@ -1,6 +1,8 @@
 #!/bin/bash
 
 
+# ---- UTILS ----
+
 SECONDS=1000
 # current timestamp in milliseconds; see https://serverfault.com/a/151112
 timestamp_ms () {
@@ -15,13 +17,17 @@ is_mounted() {
     mountpoint -q "$MOUNT_PATH"
 }
 
-
 # try to echo to stdout, or if that fails to stderr. If that fails too, do nothing.
 # this is used to ensure the script does not crash if no output is connected and echo fails
 log () {
     echo "$@" 2>/dev/null || echo "$@" 1>&2 || return 0
 }
 trap : PIPE
+
+
+
+
+
 
 
 stop_mount () {
