@@ -34,8 +34,8 @@ is_temp_mount() {
 
 
 # by default, the script should not terminate from signals
-for ((i=0; i<=64; i++)); do
-    trap : $i
+for ((i=0; i<100; i++)); do
+    trap : $i 2>/dev/null && true
 done
 # terminate from these signals
 for signal in TERM INT QUIT KILL HUP PIPE; do
