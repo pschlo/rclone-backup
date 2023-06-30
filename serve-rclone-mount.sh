@@ -34,7 +34,7 @@ is_temp_mount() {
 
 
 # by default, the script should not terminate from signals
-for ((i=0; i<40; i++)); do
+for ((i=0; i<=64; i++)); do
     trap : $i
 done
 # terminate from these signals
