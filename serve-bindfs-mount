@@ -1,4 +1,5 @@
 #!/bin/bash
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 source "$SCRIPT_DIR"/serve-custom-mount.sh
+
 serve_mount bindfs -f "$SOURCE" MOUNTPOINT
