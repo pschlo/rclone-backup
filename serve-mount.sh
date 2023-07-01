@@ -195,9 +195,11 @@ safe_exit_handler () {
         # stdout and stderr are the same, merge them
         # pipe exits with exit code of exit_handler because we set pipefail and fd_wrapper exits with 0
         exit_handler $retval 2>&1 | fd_wrapper 1
+        exit $?
     else
         # stdout and stderr are different, keep them separate
         exit_handler $retval 1> >(fd_wrapper 1) 2> >(fd_wrapper 2)
+        exit $?
     fi
 
     # obsolete, but keep for safety
