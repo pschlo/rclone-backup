@@ -20,7 +20,10 @@ set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.c
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 set -o errtrace
-source "./mount-utils.sh"
+SCRIPT_PATH="$(realpath "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+source "$SCRIPT_DIR/mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 MOUNTPOINT_PLACEHOLDER="MOUNTPOINT"
 
