@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # POSITIONAL ARGUMENTS
-#   1..--       mount command with MOUNTPOINT instead of actual mountpoint
-#   --..     program path and arguments
+#   1 to --    mount command with MOUNTPOINT instead of actual mountpoint
+#   after --   program path and arguments
 
 # EXIT CODES
 #   In general, the exit code of the program is returned.
@@ -28,13 +28,25 @@ MOUNTPOINT_PLACEHOLDER="MOUNTPOINT"
 
 # ---- UTILS ----
 
+print_err () {
+    echo "ERROR: $1" >&2
+}
+
+print_warn () {
+    echo "WARN: $1" >&2
+}
+
+print_info () {
+    echo "$1"
+}
+
 
 is_temp_mount() {
     [[ ! ${CUSTOM_MOUNTPOINT+1} ]];
 }
 
 
-# by default, the script should not terminate from signals
+# by default, this script should not terminate from signals
 for ((i=0; i<100; i++)); do
     trap : $i 2>/dev/null && true
 done
@@ -53,7 +65,7 @@ MOUNT_CMD=()
 while [[ (($# > 0)) && $1 != "--" ]]; do
     case "$1" in
         "--mountpoint")
-            if [[ ! ${2+1} ]]; then echo "ERROR: must specify mountpoint"; exit 255; fi
+            if [[ ! ${2+1} ]]; then print_err "must specify mountpoint"; exit 255; fi
             CUSTOM_MOUNTPOINT="$2"
             shift
             shift
@@ -69,13 +81,13 @@ while [[ (($# > 0)) && $1 != "--" ]]; do
     esac
 done
 
-if ((${#MOUNT_CMD[@]} == 0)); then echo "ERROR: missing mount command"; exit 255; fi
+if ((${#MOUNT_CMD[@]} == 0)); then print_err "missing mount command"; exit 255; fi
 
-if (($# == 0)); then echo "ERROR: missing -- delimiter"; exit 255; fi
+if (($# == 0)); then print_err "missing -- delimiter"; exit 255; fi
 # remove -- delimiter
 shift
 
-if (($# == 0)); then echo "ERROR: missing program path"; exit 255; fi
+if (($# == 0)); then print_err "missing program path"; exit 255; fi
 
 # path to program
 PROGRAM_PATH="$1"
@@ -103,7 +115,7 @@ exit_handler () {
     # define handler for when cleanup fails
     # note that it is not possible trap EXIT inside of exit handler
     err_handler () {
-        echo "ERROR: cleanup failed" >&2 && true
+        print_err "cleanup failed" && true
         exit 255
     }
     trap err_handler ERR
@@ -112,7 +124,7 @@ exit_handler () {
     if [[ ${IS_LAUNCHED+1} ]]; then
         if ((retval==255)); then
             # either the program exited with code 255 or a signal handler was called
-            echo "WARN: program either finished with code 255 or has been aborted"
+            print_warn "WARN: program either finished with code 255 or has been aborted"
         else
             # program exited
             # exit code will be either program exit code or special exit code like 126, 127 or 128
@@ -122,11 +134,11 @@ exit_handler () {
         # program was not launched
         if ((retval==0)); then
             # this means that exit 0 was called before the program was started, which should NOT happen
-            echo "ERROR: program was not launched"
+            print_err "program was not launched"
         elif ((retval==255)); then
-            echo "ERROR: program was not launched: received exit signal"
+            print_err "program was not launched: received exit signal"
         else
-            echo "ERROR: program was not launched: an error occurred"
+            print_err "program was not launched: an error occurred"
         fi
         retval=255
     fi
@@ -148,7 +160,7 @@ delete_mount_dir () {
     # when mount could not be unmounted, rm might fail
     if is_temp_mount; then
         rm -d "$MOUNTPOINT"
-        if (($?>0)); then echo "ERROR: could not delete temporary mount folder"; return 1; fi
+        if (($?>0)); then print_err "could not delete temporary mount folder"; return 1; fi
     fi
     return 0
 }
@@ -220,7 +232,7 @@ if is_temp_mount; then
     MOUNTPOINT="$(mktemp -d)"
 else
     if [[ ! -d $CUSTOM_MOUNTPOINT ]]; then
-        echo "ERROR: mountpoint does not exist"
+        print_err "mountpoint does not exist"
         exit 255
     fi
     MOUNTPOINT="$CUSTOM_MOUNTPOINT"
@@ -234,7 +246,7 @@ for i in "${!MOUNT_CMD[@]}"; do
        is_set="true"
    fi
 done
-if [[ $is_set == "false" ]]; then echo "ERROR: command does not contain $MOUNTPOINT_PLACEHOLDER placeholder"; exit 255; fi
+if [[ $is_set == "false" ]]; then print_err "command does not contain $MOUNTPOINT_PLACEHOLDER placeholder"; exit 255; fi
 
 # launch mount command as daemon, but keep stdout connected to current terminal
 setsid "${MOUNT_CMD[@]}" &
@@ -247,7 +259,7 @@ wait_mount $MOUNT_PID "$MOUNTPOINT"
 # do not allow empty mount dir
 # this happens e.g. when rclone mounts an invalid path
 if [[ ! ${ALLOW_EMPTY+1} && ! "$(ls -A "$MOUNTPOINT")" ]]; then
-    echo "ERROR: mount is empty"
+    print_err "mount is empty"
     exit 255
 fi
 echo "mount successful"
