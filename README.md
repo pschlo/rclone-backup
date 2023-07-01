@@ -15,7 +15,7 @@ This script temporarily provides a mount to a program. It performs the following
 ## Usage
 
 ```bash
-$ ./serve-mount <mount-command> [<options>] -- <program-command>
+$ ./serve-mount [<options>] <mount-command> -- <program-command>
 ```
 
 `mount-command` must contain the placeholder argument `MOUNTPOINT`, which will automatically be replaced with the actual mount point.
@@ -61,7 +61,7 @@ mount 1918@tmp.tcGOND2WhQ stopped
 In this repository you can also find `serve-rclone-mount.sh` and `serve-bindfs-mount.sh`, which are small convenience wrappers around `serve-mount.sh` for `restic` or `bindfs` mounts. They both use a syntax defined by `serve-custom-mount.sh` and are used as follows:
 
 ```bash
-$ ./serve-***-mount <source> [<options> --] <program-command>
+$ ./serve-***-mount [<options> --] <source> <program-command>
 ```
 
 The example from before could thus also be written as:

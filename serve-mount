@@ -89,8 +89,9 @@ done
 if (($# == 0)); then log_err "missing -- delimiter"; exit 1; fi
 shift
 
-# finally, extract program path
-if (($# == 0)); then log_err "missing program path"; exit 1; fi
+# rest is program command
+# extract program path
+if (($# == 0)); then log_err "missing program command"; exit 1; fi
 PROGRAM_PATH="$1"
 shift
 if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
