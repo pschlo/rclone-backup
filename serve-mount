@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # POSITIONAL ARGUMENTS
-#   1 to --    mount command with MOUNTPOINT instead of actual mountpoint
-#   after --   program path and arguments
+#   1 to ..     script options
+#   .. to --    mount command with MOUNTPOINT instead of actual mountpoint
+#   after --    program path and arguments
 
 # EXIT CODES
 #   In general, the exit code of the program is returned.
@@ -56,11 +57,12 @@ done
 
 # (no longer) adapted from https://stackoverflow.com/a/14203146
 
-MOUNT_CMD=()
-while [[ (($# > 0)) && $1 != "--" ]]; do
+# first, collect script arguments
+is_done="false"
+while [[ (($# > 0)) && $is_done == "false" ]]; do
     case "$1" in
         "--mountpoint")
-            if [[ ! ${2+1} ]]; then log_err "must specify mountpoint"; exit 255; fi
+            if [[ ! ${2+1} ]]; then log_err "must specify mountpoint"; exit 1; fi
             CUSTOM_MOUNTPOINT="$2"
             shift
             shift
@@ -70,21 +72,25 @@ while [[ (($# > 0)) && $1 != "--" ]]; do
             shift
             ;;
         *)
-            MOUNT_CMD+=("$1")
-            shift
+            is_done="true"
             ;;
     esac
 done
 
-if ((${#MOUNT_CMD[@]} == 0)); then log_err "missing mount command"; exit 255; fi
+# then, collect mount command
+if (($# == 0)); then log_err "missing mount command"; exit 1; fi
+MOUNT_CMD=()
+while [[ (($# > 0)) && $1 != "--" ]]; do
+    MOUNT_CMD+=("$1")
+    shift
+done
 
-if (($# == 0)); then log_err "missing -- delimiter"; exit 255; fi
 # remove -- delimiter
+if (($# == 0)); then log_err "missing -- delimiter"; exit 1; fi
 shift
 
-if (($# == 0)); then log_err "missing program path"; exit 255; fi
-
-# path to program
+# finally, extract program path
+if (($# == 0)); then log_err "missing program path"; exit 1; fi
 PROGRAM_PATH="$1"
 shift
 if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
@@ -147,6 +153,8 @@ exit_handler () {
 cleanup () {
     if [[ ${MOUNT_PID+1} ]]; then
         stop_mount $MOUNT_PID "$MOUNTPOINT"
+    fi
+    if [[ ${MOUNTPOINT+1} ]]; then
         delete_mount_dir
     fi
 }
@@ -154,7 +162,7 @@ cleanup () {
 delete_mount_dir () {
     # when mount could not be unmounted, rm might fail
     if is_temp_mount; then
-        rm -d "$MOUNTPOINT"
+        rm -d "$MOUNTPOINT" && true
         if (($?>0)); then log_err "could not delete temporary mount folder"; return 1; fi
     fi
     return 0
@@ -230,7 +238,7 @@ if is_temp_mount; then
 else
     if [[ ! -d $CUSTOM_MOUNTPOINT ]]; then
         log_err "mountpoint does not exist"
-        exit 255
+        exit 1
     fi
     MOUNTPOINT="$CUSTOM_MOUNTPOINT"
 fi
@@ -243,7 +251,10 @@ for i in "${!MOUNT_CMD[@]}"; do
        is_set="true"
    fi
 done
-if [[ $is_set == "false" ]]; then log_err "command does not contain $MOUNTPOINT_PLACEHOLDER placeholder"; exit 255; fi
+if [[ $is_set == "false" ]]; then
+    log_err "mount command does not contain $MOUNTPOINT_PLACEHOLDER placeholder"
+    exit 1
+fi
 
 # launch mount command as daemon, but keep stdout connected to current terminal
 setsid "${MOUNT_CMD[@]}" &
@@ -257,7 +268,7 @@ wait_mount $MOUNT_PID "$MOUNTPOINT"
 # this happens e.g. when rclone mounts an invalid path
 if [[ ! ${ALLOW_EMPTY+1} && ! "$(ls -A "$MOUNTPOINT")" ]]; then
     log_err "mount is empty"
-    exit 255
+    exit 1
 fi
 log_info "mount successful"
 
