@@ -27,7 +27,7 @@ shift
 
 # get program code
 if (($# == 0)); then echo "ERROR: missing program command"; exit 1; fi
-PROGRAM_CMD="$@"
+PROGRAM_CMD=("$@")
 
 
 serve_mount () {
