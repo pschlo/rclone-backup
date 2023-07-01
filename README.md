@@ -70,6 +70,18 @@ The example from before could thus also be written as:
 $ ./serve-rclone-mount my-cloud: ls -l
 ```
 
+If you want to write a convenience script for another mount command, then you just need to create a file with the following content:
+
+```bash
+#!/bin/bash
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+source "$SCRIPT_DIR"/serve-custom-mount.sh
+
+serve_mount <your-mount-command-here>
+```
+
+Make sure to replace `<your-mount-command-here>` with your mount command. Your command may include `$SOURCE` and must include `MOUNTPOINT` in its arguments. You also need `serve-custom-mount.sh`, `mount-utils.sh` and `serve-mount` to be in the same folder as your script.
+
 
 
 ## ToDo
