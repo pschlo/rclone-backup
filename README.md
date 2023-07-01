@@ -1,29 +1,37 @@
 # serve-fuse-mount
 
-This script temporarily provides a mount to a program.
+This script temporarily provides a mount to a program. It performs the following steps:
+
+1. **set up** a mount in a temporary directory and wait for it to become available
+2. **execute** the program in the mount directory
+3. **wait** for it to finish
+4. **close** the mount
+5. **return** the exit code of the executed program
+
+> **NOTE:** currently, the mount process is killed if the mount point cannot be unmounted. This may lead to data loss for mount processes using a write cache.
 
 
 
 ## Usage
 
 ```bash
-$ ./serve-mount.sh mount-command -- program-command
+$ ./serve-mount <mount-command> -- <program-command>
 ```
 
 `mount-command` must contain the placeholder argument `MOUNTPOINT`, which will automatically be replaced with the actual mount point.
 
 
 
-## Examples
+## Example
 
 ```bash
-$ ./serve-mount.sh rclone mount my-cloud: MOUNTPOINT -- ls -l
+$ ./serve-mount rclone mount my-cloud: MOUNTPOINT -- ls -l
 ```
 
 This will mount the rclone remote `my-cloud` under a temporary mountpoint, execute `ls -l`  there, and then unmount `my-cloud` again. If you find this command too long and messy, you can also write this as:
 
 ```bash
-$ ./serve-mount.sh \
+$ ./serve-mount \
 >     rclone mount my-cloud: MOUNTPOINT \
 >     -- \
 >     ls -l
@@ -46,3 +54,25 @@ waiting for mount 1918@tmp.tcGOND2WhQ to stop
 mount 1918@tmp.tcGOND2WhQ stopped
 ```
 
+
+
+## Convenience Scripts
+
+In this repository you can also find `serve-rclone-mount.sh` and `serve-bindfs-mount.sh`, which are small convenience wrappers around `serve-mount.sh` for `restic` or `bindfs` mounts. They both use a syntax defined by `serve-custom-mount.sh` and are used as follows:
+
+```bash
+$ ./serve-***-mount <source> [<options> --] <program-command>
+```
+
+The example from before could thus also be written as:
+
+```bash
+$ ./serve-rclone-mount my-cloud: ls -l
+```
+
+
+
+## ToDo
+
+* extend readme
+* add option to change behavior if `umount` fails (e.g. a timeout before mount process is killed)
