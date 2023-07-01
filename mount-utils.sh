@@ -17,16 +17,6 @@ is_mounted() {
     mountpoint -q "$MOUNT_PATH"
 }
 
-# try to echo to stdout, or if that fails to stderr. If that fails too, do nothing.
-# this is used to ensure the script does not crash if no output is connected and echo fails
-log () {
-    echo "$@" 2>/dev/null || echo "$@" 1>&2 || return 0
-}
-trap : PIPE
-
-
-
-
 
 
 
@@ -44,32 +34,32 @@ stop_mount () {
     if ! is_alive; then return 0; fi
 
     if is_mounted; then
-        umount "$MOUNT_PATH" 2>/dev/null
+        umount "$MOUNT_PATH" 2>/dev/null && true
         if (($? > 0)); then
-            log "WARN: unmounting $mount_str failed; killing mount process"
+            echo "WARN: unmounting $mount_str failed; killing mount process"
             # we could *wait* for processes to finish their business with the mount dir,
             # but this script assumes that a *single* process is accessing the mount.
             # Upon exit signal, bash first waits for the running command to finish and
             # then finishes itself. Thus, the process is dead already.
 
             # kill might fail if mount process died in the meantime
-            kill $MOUNT_PID 2>/dev/null
+            kill $MOUNT_PID 2>/dev/null && true
         fi
     else
         # not yet mounted
         # kill might fail if mount process died in the meantime
-        kill $MOUNT_PID 2>/dev/null
+        kill $MOUNT_PID 2>/dev/null && true
     fi
 
-    log "waiting for mount $mount_str to stop"
+    echo "waiting for mount $mount_str to stop"
     # wait for TIMEOUT_MS millisecods for the mount process to terminate
     TIMEOUT_MS=$((TIMEOUT_SECS*SECONDS))
     t0=$(timestamp_ms)
     is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
     while is_alive && ! is_timeout; do sleep 0.1; done
-    if is_alive; then log "ERROR: Could not terminate mount process $mount_str"; return 1; fi
-    log "mount $mount_str stopped"
+    if is_alive; then echo "ERROR: Could not terminate mount process $mount_str"; return 1; fi
+    echo "mount $mount_str stopped"
     return 0
 }
 
@@ -89,7 +79,7 @@ wait_mount () {
     is_timeout() { (($(timestamp_ms)-t0 >= TIMEOUT_MS)); }
 
     while ! is_mounted && is_alive && ! is_timeout; do sleep 0.1; done
-    if ! is_alive; then log "ERROR: mount $mount_str stopped"; return 1; fi
-    if is_timeout && ! is_mounted; then log "ERROR: mount $mount_str timed out"; return 1; fi
+    if ! is_alive; then echo "ERROR: mount $mount_str stopped"; return 1; fi
+    if is_timeout && ! is_mounted; then echo "ERROR: mount $mount_str timed out"; return 1; fi
     return 0
 }
