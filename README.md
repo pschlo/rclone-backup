@@ -15,7 +15,7 @@ This script temporarily provides a mount to a program. It performs the following
 ## Usage
 
 ```bash
-$ ./serve-mount <mount-command> -- <program-command>
+$ ./serve-mount <mount-command> [<options>] -- <program-command>
 ```
 
 `mount-command` must contain the placeholder argument `MOUNTPOINT`, which will automatically be replaced with the actual mount point.
