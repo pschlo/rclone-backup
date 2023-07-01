@@ -124,7 +124,7 @@ exit_handler () {
     if [[ ${IS_LAUNCHED+1} ]]; then
         if ((retval==255)); then
             # either the program exited with code 255 or a signal handler was called
-            print_warn "WARN: program either finished with code 255 or has been aborted"
+            print_warn "program either finished with code 255 or has been aborted"
         else
             # program exited
             # exit code will be either program exit code or special exit code like 126, 127 or 128
@@ -176,7 +176,7 @@ fd_wrapper () {
     # redirect stdin to file descriptor
     # nothing happens if file descriptor is invalid
     while IFS= read -r line; do
-        echo "FOO $1  $line" >&$1 2>/dev/null && true
+        echo "$line" >&$1 2>/dev/null && true
     done
     exit 0
 }
