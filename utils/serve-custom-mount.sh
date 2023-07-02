@@ -1,7 +1,3 @@
-#!/bin/bash
-
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-
 
 # get options
 OPTIONS=()
@@ -30,5 +26,6 @@ PROGRAM_CMD=("$@")
 
 
 serve_mount () {
-    "$SCRIPT_DIR"/serve-mount "${OPTIONS[@]}" "$@" -- "${PROGRAM_CMD[@]}"
+    SCRIPT_DIR="$(dirname "$(realpath "$BASH_SOURCE")")"
+    "$SCRIPT_DIR"/../serve-mount "${OPTIONS[@]}" "$@" -- "${PROGRAM_CMD[@]}"
 }
