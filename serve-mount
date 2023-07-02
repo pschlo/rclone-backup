@@ -23,7 +23,7 @@ set -o pipefail  # don't hide errors within pipes
 set -o errtrace
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
-source "$SCRIPT_DIR/mount-utils.sh"
+source "$SCRIPT_DIR/utils/mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 MOUNTPOINT_PLACEHOLDER="MOUNTPOINT"
 

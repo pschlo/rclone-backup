@@ -1,5 +1,5 @@
 #!/bin/bash
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-source "$SCRIPT_DIR"/serve-custom-mount.sh
+source "$SCRIPT_DIR"/utils/serve-custom-mount.sh
 
 serve_mount rclone mount "$SOURCE" MOUNTPOINT --read-only
