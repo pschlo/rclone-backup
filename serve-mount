@@ -179,7 +179,7 @@ fd_wrapper () {
     # redirect stdin to file descriptor
     # nothing happens if file descriptor is invalid
     while IFS= read -r line; do
-        log_info "$line" >&$1 2>/dev/null && true
+        echo "$line" >&$1 2>/dev/null && true
     done
     exit 0
 }
