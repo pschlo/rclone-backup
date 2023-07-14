@@ -151,8 +151,8 @@ exit_handler () {
 
 
 cleanup () {
-    if [[ ${MOUNT_PID+1} ]]; then
-        stop_mount $MOUNT_PID "$MOUNTPOINT"
+    if [[ ${MOUNT_PGID+1} ]]; then
+        stop_mount $MOUNT_PGID "$MOUNTPOINT"
     fi
     if [[ ${MOUNTPOINT+1} ]]; then
         delete_mount_dir
@@ -193,6 +193,7 @@ fd_wrapper () {
 
 safe_exit_handler () {
     retval=$?
+    set +m  # ensure job control is disabled
     cd "$ORIGINAL_PWD"
 
     # we want to keep stdout and stderr separate AND we want to keep the order
@@ -256,12 +257,22 @@ if [[ $is_set == "false" ]]; then
     exit 1
 fi
 
-# launch mount command as daemon, but keep stdout connected to current terminal
-setsid "${MOUNT_CMD[@]}" &
-MOUNT_PID=$!
+
+# launch mount command
+# temporarily enable job control so that the mount process and its children gets their own process group
+# also see https://stackoverflow.com/a/6552484
+echo "here"
+set -m
+(
+    trap "" TTOU
+    "${MOUNT_CMD[@]}" </dev/null
+) &
+set +m
+MOUNT_PGID=$!
+echo "here2"
 
 # wait until mount becomes available
-wait_mount $MOUNT_PID "$MOUNTPOINT"
+wait_mount $MOUNT_PGID "$MOUNTPOINT"
 
 # successfully mounted
 # do not allow empty mount dir
