@@ -1,5 +1,16 @@
 
 
+
+# ------ CONFIG -----
+
+# all durations are seconds
+IS_MOUNTED_TIMEOUT=3
+WAIT_MOUNT_TIMEOUT=10
+STOP_MOUNT_TIMEOUT=10
+
+
+
+
 # ---- UTILS ----
 
 log_err () { echo "ERROR: $1" >&2; }
@@ -12,14 +23,20 @@ timestamp_ms () {
     echo $(($(date +%s%N)/1000000))
 }
 
-# $1: mount PID
+# $1: mount session ID (usually same as PID)
 is_alive() {
-    ps -p "$1" >/dev/null
+    pgrep -s "$1" >/dev/null
+}
+
+# $1: PID
+kill_session() {
+    pkill -TERM -s "$1" 2>/dev/null
 }
 
 # $1: mount path
 is_mounted() {
-    mountpoint -q "$1"
+    # in case of broken/stale mount, 'mountpoint' can freeze
+    timeout "$IS_MOUNTED_TIMEOUT"s mountpoint -q "$1"
 }
 
 
@@ -33,7 +50,7 @@ stop_mount () {
     if [[ ${3+x} ]]; then
         local TIMEOUT_SECS="$3"
     else
-        local TIMEOUT_SECS=10
+        local TIMEOUT_SECS="$STOP_MOUNT_TIMEOUT"
     fi
 
     if ! is_alive $PID; then return 0; fi
@@ -48,12 +65,12 @@ stop_mount () {
             # then finishes itself. Thus, the process is dead already.
 
             # kill might fail if mount process died in the meantime
-            kill $PID 2>/dev/null && true
+            kill_session $PID && true
         fi
     else
         # not yet mounted
         # kill might fail if mount process died in the meantime
-        kill $PID 2>/dev/null && true
+        kill_session $PID && true
     fi
 
     log_info "waiting for mount $mount_str to stop"
@@ -81,7 +98,7 @@ wait_mount () {
     if [[ ${3+x} ]]; then
         local TIMEOUT_SECS="$3"
     else
-        local TIMEOUT_SECS=10
+        local TIMEOUT_SECS="$WAIT_MOUNT_TIMEOUT"
     fi
 
     local TIMEOUT_MS=$((TIMEOUT_SECS*SECONDS))
