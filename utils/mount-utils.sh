@@ -25,12 +25,12 @@ timestamp_ms () {
 
 # $1: mount session ID (usually same as PID)
 is_alive() {
-    pgrep -s "$1" >/dev/null
+    pgrep -g "$1" >/dev/null
 }
 
 # $1: PID
 kill_session() {
-    pkill -TERM -s "$1" 2>/dev/null
+    pkill -TERM -g "$1" 2>/dev/null
 }
 
 # $1: mount path
@@ -41,7 +41,7 @@ is_mounted() {
 
 
 
-
+# the main command is 'umount'.
 stop_mount () {
     local PID=$1
     local POINT="$2"
@@ -53,6 +53,7 @@ stop_mount () {
         local TIMEOUT_SECS="$STOP_MOUNT_TIMEOUT"
     fi
 
+    # already unmounted
     if ! is_alive $PID; then return 0; fi
 
     if is_mounted $POINT; then

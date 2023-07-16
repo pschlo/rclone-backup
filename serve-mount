@@ -257,9 +257,9 @@ if [[ $is_set == "false" ]]; then
     exit 1
 fi
 
-# launch mount command as daemon, but keep stdout connected to current terminal
 
 
+# ------ LAUNCHING THE MOUNT PROCESS ------
 
 # GENERAL INFORMATION on session and terminal
     # a session has at most one controlling terminal.
@@ -316,88 +316,24 @@ fi
         #    see https://unix.stackexchange.com/a/551649)
         # 3, as long as children stay in new session
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# GENERAL INFORMATION background with & and job control enabled
-
-
-# launch mount command asynchronously
-
-# In general, if a keyboard signal (e.g. SIGINT) is sent, the entire foreground process group of the current session receives it.
-# However, the mount should *not* react to keyboard exit signals, because we want to shut down the mount gracefully ourselves,
-# e.g. with a timeout if the mount process is still busy.
-
-# When command is started in background (&) and job control is disabled (default in bash script),
-# then the command will, by default, ignore SIGINT and SIGQUIT (see https://unix.stackexchange.com/a/677742).
-# However, the command can override this and define its own signal handlers (e.g. rclone does this).
-
-# To prevent the mount process from receiving keyboard exit signals,
-# we thus need to put the command in a separate process group or even in a separate session.
-
-# GENERAL INFORMATION on session and terminal
-    # a session has at most one controlling terminal
-    # a session has at most one foreground process group, which can interact with the controlling terminal
-    # daemons usually have a session without controlling terminal
-    # a "background process" is a process that is in a background group (i.e. not in the foreground group)
-    # see https://stackoverflow.com/a/6553076
-    # see https://askubuntu.com/a/979116
-
-# EXAMPLE with sshfs
+# EXAMPLE: sshfs, prompting the user for a password, e.g. if no ssh keys are set up
     # sshfs process is spawned
-    # sshfs spawns ssh with same session and same process group, but parent set to init
-    # even if sshfs redirects everything to /dev/null, the ssh process still writes a password prompt to terminal
+    # sshfs spawns ssh process with same session and same process group, but parent set to init
+    # even if sshfs redirects everything to /dev/null, the ssh process still writes a password prompt to terminal,
+    # likely by writing directly to its controlling terminal and not stdout.
 
-# OPTION A) separate process group
-    # Executing a command in a new process group can be done with bash job control.
-    # With job control enabled, a *background* process that tries to read/write from/to its *controlling* terminal
-    # potentially receives SIGTTIN/SIGTTOU and stops. This behavior can be changed with 'stty'.
-    # SIGTTOU is also received if a background process tries to set the terminal's modes.
-    # Note that SIGTTIN/SIGTTOU is received by the *entire* process group.
-    # see https://stackoverflow.com/q/72758706 and https://unix.stackexchange.com/questions/550097/a-process-is-being-stopped-by-sigttin-is-there-a-good-way-of-tracing-what-proce#comment1021063_550097
-    # see https://www.gnu.org/software/libc/manual/html_node/Job-Control-Signals.html
-    # https://www.gnu.org/software/bash/manual/html_node/Job-Control-Basics.html
-
-    # in the sshfs example, sshfs and ssh are together in a new background group.
-    # However, this group receives SIGTTOU, and both sshfs and ssh stop.
+    # If sshfs is executed in a new background group with job control, it receives SIGTTOU and stops.
     # The post at https://unix.stackexchange.com/a/93778 suggests that ssh explicitly enables SIGTTOU, which might be the reason.
     # It might also be because ssh tries to set terminal options.
-    # A solution might be to redirect stdout and stdin???????? TODO HERE
 
-# OPTION B) separate session
-    # Executing a command in a new session can be done with 'setsid'.
-    # The new session has no controlling terminal.
-    # The file descriptors of the process are copied from the parent, so that the new process can still write to the original terminal.
-    # Because the original terminal is not the *controlling* terminal of the process, it does not receive SIGTTOU.
-    # see https://unix.stackexchange.com/a/551649
-    # Note that stdin of the new process should be closed/redirected. Otherwise, the terminal ends up in a weird state.
+    # if sshfs is executed with setsid, it does not receive SIGTTOU. It also does not prompt for a password,
+    # likely because it does not have a controlling terminal.
+    # stdout is still set to the original terminal and can thus be observed.
 
-    # in the sshfs example, sshfs and ssh are together in a new session without a controlling terminal.
-    # Probably because there is no controlling terminal, the usual password prompt from the ssh process does not appear.
-    # Instead, either sshfs or ssh look for 'ssh-askpass', but there is no stdin, so password cannot be read.
-    # This script eventually times out and kills all processes in the sshfs session.
-
-
-
-
-
-
-setsid "${MOUNT_CMD[@]}" <&- &
+set -m  # enable job control
+"${MOUNT_CMD[@]}" <&- &  # spawn in new background process group
 MOUNT_PID=$!
+set +m  # disable job control
 
 # wait until mount becomes available
 wait_mount $MOUNT_PID "$MOUNTPOINT"
