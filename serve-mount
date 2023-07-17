@@ -23,6 +23,19 @@ set -o pipefail  # don't hide errors within pipes
 set -o errtrace
 SCRIPT_DIR="$(dirname "$(realpath "$BASH_SOURCE")")"
 
+# ensure that the controlling terminal has disabled TOSTOP so that SIGTTOU is not sent by default
+# if stdout is connected to a different terminal, SIGTTOU is not sent anyway
+
+has_controlling_terminal () {
+    stty --file /dev/tty >/dev/null 2>&1
+}
+
+# check if we have a controlling terminal
+if has_controlling_terminal; then
+    TTY_SETTINGS="$(stty --file /dev/tty --save)"
+    stty --file /dev/tty -tostop
+fi
+
 source "$SCRIPT_DIR/utils/mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 MOUNTPOINT_PLACEHOLDER="MOUNTPOINT"
@@ -146,6 +159,10 @@ exit_handler () {
 
     # retval is now either the exit code of the program, a special exit code, or 255.
     cleanup
+    # restore terminal settings
+    if has_controlling_terminal; then
+        stty --file /dev/tty "$TTY_SETTINGS"
+    fi
     exit $retval
 }
 
@@ -193,14 +210,14 @@ fd_wrapper () {
 
 safe_exit_handler () {
     retval=$?
-    set +m
+    set +m  # ensure job control is disabled
     cd "$ORIGINAL_PWD"
 
     # we want to keep stdout and stderr separate AND we want to keep the order
     # however, if stdout and stderr are written to separate processes, then race condition can happen and the order is not preserved
     # thus: if stdout and stderr point to same thing, use only one safety wrapper
     # otherwise order does not matter and we can use two wrappers
-    if [[ "$(readlink /proc/$$/fd/1)" == "$(readlink /proc/$$/fd/2)" ]]; then
+    if [[ "$(readlink -f /dev/fd/1)" == "$(readlink -f /dev/fd/2)" ]]; then
         # stdout and stderr are the same, merge them
         # pipe exits with exit code of exit_handler because we set pipefail and fd_wrapper exits with 0
         exit_handler $retval 2>&1 | fd_wrapper 1
@@ -331,7 +348,11 @@ fi
     # stdout is still set to the original terminal and can thus be observed.
 
 set -m  # enable job control
-"${MOUNT_CMD[@]}" <&- &  # spawn in new background process group
+# spawn in new background process group
+# if this script exits and any process in the new group is stopped, e.g. from SIGTTIN,
+# the group becomes orphaned and receives SIGHUP.
+# see https://unix.stackexchange.com/q/490986 and https://unix.stackexchange.com/a/484373
+"${MOUNT_CMD[@]}" <&- &
 MOUNT_PID=$!
 set +m  # disable job control
 
