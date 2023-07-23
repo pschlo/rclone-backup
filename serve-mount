@@ -17,98 +17,115 @@
 
 
 
-set -o errexit   # abort on nonzero exitstatus; also see https://stackoverflow.com/a/11231970
+set -o errexit   # abort on nonzero exit status; also see https://stackoverflow.com/a/11231970
 set -o nounset   # abort on unbound variable
 set -o pipefail  # don't hide errors within pipes
 set -o errtrace
-SCRIPT_DIR="$(dirname "$(realpath "$BASH_SOURCE")")"
 
-# ensure that the controlling terminal has disabled TOSTOP so that SIGTTOU is not sent by default
-# if stdout is connected to a different terminal, SIGTTOU is not sent anyway
+# define temporary exit handler to guarantee that 255 is returned on failure
+tmp_exit_handler () {
+    (($? == 0)) && exit 0
+    exit 255
+}
+trap tmp_exit_handler EXIT
 
-has_controlling_terminal () {
-    stty --file /dev/tty >/dev/null 2>&1
+
+
+
+
+
+# ------ FILE DESCRIPTORS -------
+
+# we have three outputting processes, which have two output streams each. We assign the file descriptors as follows:
+    # - this script: 1,2
+    # - the mount process: 3,4
+    # - the program being executed in the mount: 5,6
+# first fd is for stdout, second is for stdin.
+
+
+# checks if all given fds are open
+# $1..: file descriptor numbers
+is_fds_open () {
+    for fd in "$@"; do
+        [[ -e /dev/fd/$fd ]] || return 1
+    done
+    return 0
 }
 
-# check if we have a controlling terminal
-if has_controlling_terminal; then
-    TTY_SETTINGS="$(stty --file /dev/tty --save)"
-    stty --file /dev/tty -tostop
+# checks if all given fds are closed
+# $1..: file descriptor numbers
+is_fds_closed () {
+    for fd in "$@"; do
+        [[ -e /dev/fd/$fd ]] && return 1
+    done
+    return 0
+}
+
+
+# check open file descriptors
+
+if is_fds_open 1 2 3 4 5 6; then
+    : # all set
+elif is_fds_open 1 2 3 && is_fds_closed 4 5 6; then
+    # only 1, 2 and 3 are open
+    # interpret this as "script outputs to 1, mount to 2 and program to 3", such that stdout and stderr point to same file
+    # update the fds accordingly
+    exec 6>&3
+    exec 5>&3
+    exec 4>&2
+    exec 3>&2
+    exec 2>&1
+    exec 1>&1
+elif is_fds_open 1 2 && is_fds_closed 3 4 5 6; then
+    # interpret as "everything should send its stdout to 1 and stderr to 2"
+    exec 6>&2
+    exec 5>&1
+    exec 4>&2
+    exec 3>&1
+    exec 2>&2
+    exec 1>&1
+else
+    # print error to fd 2
+    echo "invalid file descriptor combination." >&2
+    exit 255
 fi
 
+
+
+
+
+
+
+
+# ---- UTILS AND SETUP ----
+
+SCRIPT_DIR="$(dirname "$(realpath "$BASH_SOURCE")")"
 source "$SCRIPT_DIR/utils/mount-utils.sh"
 ORIGINAL_PWD="$PWD"
 MOUNTPOINT_PLACEHOLDER="MOUNTPOINT"
-
-
-
-# ---- UTILS ----
 
 log_err () { echo "ERROR: $1" >&2; }
 log_warn () { echo "WARN: $1" >&2; }
 log_info () { echo "$1"; }
 
-
 is_temp_mount() {
     [[ ! ${CUSTOM_MOUNTPOINT+1} ]];
 }
-
 
 # by default, this script should not terminate from signals
 for ((i=0; i<100; i++)); do
     trap : $i 2>/dev/null && true
 done
+
 # terminate from these signals
 for signal in TERM INT QUIT KILL HUP PIPE; do
     trap "exit 255" $signal
 done
 
-
-
-# ---- PARSE ARGUMENTS ----
-
-# (no longer) adapted from https://stackoverflow.com/a/14203146
-
-# first, collect script arguments
-is_done="false"
-while [[ (($# > 0)) && $is_done == "false" ]]; do
-    case "$1" in
-        "--mountpoint")
-            if [[ ! ${2+1} ]]; then log_err "must specify mountpoint"; exit 1; fi
-            CUSTOM_MOUNTPOINT="$2"
-            shift
-            shift
-            ;;
-        "--allow-empty")
-            ALLOW_EMPTY="true"
-            shift
-            ;;
-        *)
-            is_done="true"
-            ;;
-    esac
-done
-
-# then, collect mount command
-if (($# == 0)); then log_err "missing mount command"; exit 1; fi
-MOUNT_CMD=()
-while [[ (($# > 0)) && $1 != "--" ]]; do
-    MOUNT_CMD+=("$1")
-    shift
-done
-
-# remove -- delimiter
-if (($# == 0)); then log_err "missing -- delimiter"; exit 1; fi
-shift
-
-# rest is program command
-# extract program path
-if (($# == 0)); then log_err "missing program command"; exit 1; fi
-PROGRAM_PATH="$1"
-shift
-if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
-    # relative path; convert to absolute
-    PROGRAM_PATH="$PWD"/"$PROGRAM_PATH"
+# if the terminal option TOSTOP is set and stdout/stderr of mount process is set to terminal,
+# then the mount process will receive SIGTTOU when it tries to write
+if ! stty -a | grep -q -- '-tostop'; then
+    log_warn "because terminal option "tostop" is set, mount process may be stopped when writing to terminal"
 fi
 
 
@@ -159,10 +176,6 @@ exit_handler () {
 
     # retval is now either the exit code of the program, a special exit code, or 255.
     cleanup
-    # restore terminal settings
-    if has_controlling_terminal; then
-        stty --file /dev/tty "$TTY_SETTINGS"
-    fi
     exit $retval
 }
 
@@ -202,7 +215,6 @@ fd_wrapper () {
 }
 
 
-
 # if stdout or stderr are not connected anymore at some point in this script,
 # then SIGPIPE is received, which leads to the script exiting with 255.
 # however, the exit handler contains 'echo' calls, which would fail
@@ -217,7 +229,9 @@ safe_exit_handler () {
     # however, if stdout and stderr are written to separate processes, then race condition can happen and the order is not preserved
     # thus: if stdout and stderr point to same thing, use only one safety wrapper
     # otherwise order does not matter and we can use two wrappers
-    if [[ "$(readlink -f /dev/fd/1)" == "$(readlink -f /dev/fd/2)" ]]; then
+
+    # use /proc/$$/fd instead of /dev/fd, which can give inaccurate results due to executing shell attaching pipes
+    if [[ "$(readlink -f /proc/$$/fd/1)" == "$(readlink -f /proc/$$/fd/2)" ]]; then
         # stdout and stderr are the same, merge them
         # pipe exits with exit code of exit_handler because we set pipefail and fd_wrapper exits with 0
         exit_handler $retval 2>&1 | fd_wrapper 1
@@ -233,6 +247,60 @@ safe_exit_handler () {
 }
 
 trap safe_exit_handler EXIT
+
+
+
+
+
+
+
+# ---- PARSE ARGUMENTS ----
+
+# (no longer) adapted from https://stackoverflow.com/a/14203146
+
+# first, collect script arguments
+is_done="false"
+while [[ (($# > 0)) && $is_done == "false" ]]; do
+    case "$1" in
+        "--mountpoint")
+            if [[ ! ${2+1} ]]; then log_err "must specify mountpoint"; exit 1; fi
+            CUSTOM_MOUNTPOINT="$2"
+            shift
+            shift
+            ;;
+        "--allow-empty")
+            ALLOW_EMPTY="true"
+            shift
+            ;;
+        *)
+            is_done="true"
+            ;;
+    esac
+done
+
+# then, collect mount command
+if (($# == 0)); then log_err "missing mount command"; exit 1; fi
+MOUNT_CMD=()
+while [[ (($# > 0)) && $1 != "--" ]]; do
+    MOUNT_CMD+=("$1")
+    shift
+done
+
+# remove -- delimiter
+if (($# == 0)); then log_err "missing -- delimiter"; exit 1; fi
+shift
+
+# rest is program command
+# extract program path
+if (($# == 0)); then log_err "missing program command"; exit 1; fi
+PROGRAM_PATH="$1"
+shift
+if [[ $PROGRAM_PATH == ./* || $PROGRAM_PATH == ../* ]]; then
+    # relative path; convert to absolute
+    PROGRAM_PATH="$PWD"/"$PROGRAM_PATH"
+fi
+
+
 
 
 
@@ -352,7 +420,7 @@ set -m  # enable job control
 # if this script exits and any process in the new group is stopped, e.g. from SIGTTIN,
 # the group becomes orphaned and receives SIGHUP.
 # see https://unix.stackexchange.com/q/490986 and https://unix.stackexchange.com/a/484373
-"${MOUNT_CMD[@]}" <&- &
+"${MOUNT_CMD[@]}" <&- 1>&3 2>&4 &
 MOUNT_PID=$!
 set +m  # disable job control
 
@@ -372,6 +440,8 @@ log_info "mount successful"
 
 
 
+
+
 # ---- RUNNING THE PROGRAM  ----
 log_info "launching $PROGRAM_PATH"
 log_info ""
@@ -381,7 +451,7 @@ export ORIGINAL_PWD
 # working directory for process is the mount folder
 cd "$MOUNTPOINT"
 IS_LAUNCHED=1
-"$PROGRAM_PATH" "$@" && true
+"$PROGRAM_PATH" "$@" 1>&5 2>&6 && true
 # if both this script and the program receive a signal, then once the program terminates, the script signal handler is called
 # it thus does not matter what the program does or what it returns
 # if only the program receives a signal, then either a) the program handles it and exits, which is just like a normal exit,
